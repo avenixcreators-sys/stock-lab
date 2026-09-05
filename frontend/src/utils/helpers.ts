@@ -1,5 +1,7 @@
 import { getCurrentAccessToken } from '../firebase';
 
+const BASE = import.meta.env.VITE_API_URL || '';
+
 export async function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
   const token = await getCurrentAccessToken();
   const headers: Record<string, string> = {
@@ -9,7 +11,7 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
-  return fetch(url, { ...options, headers });
+  return fetch(BASE + url, { ...options, headers });
 }
 
 export function formatINR(amount: number): string {

@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { apiFetch } from '../utils/helpers';
 import {
   onAuthStateChanged,
   createUserWithEmailAndPassword,
@@ -48,7 +49,7 @@ interface SessionUser {
  * the virtual cash balance and ensures ₹500 is granted only on first creation.
  */
 async function syncSession(idToken: string, fallbackName?: string): Promise<SessionUser> {
-  const res = await fetch('/api/auth/session', {
+  const res = await apiFetch('/api/auth/session', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
