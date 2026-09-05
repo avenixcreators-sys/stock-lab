@@ -1,0 +1,30 @@
+rules_version = '2';
+service cloud.firestore {
+// StockLab Firestore Security Rules
+//
+// Security model: the StockLab backend (Firebase Admin SDK) is the ONLY writer
+// of all user state (virtual cash, holdings, transactions, watchlist,
+// achievements, quiz results, AI Teacher chats). Admin SDK calls bypass these
+// rules, so all client WRITES are denied here to guarantee that every
+// financial mutation is server-calculated and validated.
+//
+// - Owners may READ all of their own per-user data: users/{uid}/**.
+// - No client-side writes are permitted (rules deny writes by default).
+// - Optional public READ of reference/market docs can be added under a
+//   separate top-level collection (e.g. /public/**) if ever needed by the
+//   client directly; currently the client reads all data through the backend.
+
+match /databases/{database}/documents {
+  // Per-user data. Owner (the Firebase Auth user) may read only their own data.
+  match /users/{uid}/{document=**} {
+    allow read: if request.auth != null && request.auth.uid == uid;
+    // No write rules => all client writes are denied. Server-only via Admin SDK.
+    allow write: if false;
+  }
+
+  // Explicitly deny writes everywhere else (default). Shown for clarity.
+  match /{document=**} {
+    allow read, write: if false;
+  }
+}
+}

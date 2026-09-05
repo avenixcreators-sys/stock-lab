@@ -5,6 +5,7 @@ import { apiFetch, formatCompact } from '../utils/helpers';
 import { LoadingState, ErrorState } from '../components/StateComponents';
 import { useAuth } from '../context/AuthContext';
 
+
 interface ProfileData {
   id: string;
   email: string;
@@ -131,7 +132,7 @@ export default function Profile() {
               <User className="w-4 h-4 text-gray-400" /> Member since {new Date(profile.createdAt).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
             </div>
             <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-              <Wallet className="w-4 h-4 text-gray-400" /> {formatCompact(profile.cashBalance)} Cash balance
+              <Wallet className="w-4 h-4 text-gray-400" /> {formatCompact(profile.cashBalance)} Virtual Cash balance
             </div>
           </div>
 
@@ -165,7 +166,7 @@ export default function Profile() {
               <div className="flex justify-between items-center p-4 rounded-xl bg-gray-50 dark:bg-gray-800">
                 <div>
                   <div className="font-medium">Virtual Cash Balance</div>
-                  <div className="text-xs text-gray-500">Starting balance: ₹500 Cash</div>
+                  <div className="text-xs text-gray-500">Starting balance: ₹500 Virtual Cash</div>
                 </div>
                 <div className="text-xl font-bold">{formatCompact(profile.cashBalance)}</div>
               </div>

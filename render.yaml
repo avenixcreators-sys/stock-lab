@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: stocklab
+    runtime: docker
+    repo: https://github.com/avenixcreators-sys/stock-lab
+    plan: free
+    region: singapore
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: FRONTEND_URL
+        value: https://stocklab.onrender.com
+      - key: FIREBASE_SERVICE_ACCOUNT_B64
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: ALPHA_VANTAGE_API_KEY
+        sync: false
+      - key: DATABASE_PATH
+        value: /tmp/stocklab.db

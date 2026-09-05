@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, TrendingUp, Briefcase, Star, BookOpen, User, LogOut, Menu, X, Sun, Moon, LineChart } from 'lucide-react';
+import { Home, TrendingUp, Briefcase, Star, BookOpen, User, LogOut, Menu, X, Sun, Moon, LineChart, Bot } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useState } from 'react';
@@ -10,6 +10,7 @@ const navItems = [
   { to: '/portfolio', label: 'Portfolio', icon: Briefcase },
   { to: '/watchlist', label: 'Watchlist', icon: Star },
   { to: '/learn', label: 'Learn', icon: BookOpen },
+  { to: '/ai-teacher', label: 'AI Teacher', icon: Bot },
   { to: '/profile', label: 'Profile', icon: User },
 ];
 

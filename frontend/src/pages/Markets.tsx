@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, TrendingUp, Filter, Clock } from 'lucide-react';
+import { Search, TrendingUp, Filter, Clock, Info } from 'lucide-react';
 import { apiFetch, formatCompact, formatPercent } from '../utils/helpers';
 import { LoadingState, ErrorState, EmptyState, ChangeIndicator } from '../components/StateComponents';
 import StockCard from '../components/StockCard';
@@ -9,7 +9,7 @@ interface Stock {
   symbol: string;
   name: string;
   sector: string;
-  price: number;
+  price: number | null;
   change: number;
   changePercent: number;
 }
@@ -93,6 +93,7 @@ export default function Markets() {
 
   const sectors = Array.from(new Set(stocks.map(s => s.sector)));
   const marketOpen = getMarketStatus();
+  const unavailableCount = stocks.filter(s => s.price == null).length;
 
   const sortByChange = () => {
     const sorted = [...filteredStocks].sort((a, b) => b.changePercent - a.changePercent);
@@ -114,16 +115,27 @@ export default function Markets() {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
             Stock Market
             <span className="inline-flex items-center text-[0.65rem] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-              Simulated Trading
+              Paper Trading
             </span>
           </h1>
-          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Prices from a market-data provider — trading is virtual</p>
+          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Prices from a market-data provider — paper trading</p>
         </div>
         <div className={`flex items-center gap-2 p-2 px-3 rounded-full ${marketOpen === 'open' ? 'bg-success-light dark:bg-success/10 text-success-dark dark:text-emerald-400' : 'bg-warning-light dark:bg-warning/10 text-warning-dark dark:text-amber-400'} text-sm font-medium`}>
           <span className={`w-2 h-2 rounded-full ${marketOpen === 'open' ? 'bg-success animate-pulse' : 'bg-warning'}`} />
           Market {marketOpen === 'open' ? 'Open' : 'Closed'}
         </div>
       </div>
+
+      {unavailableCount > 0 && (
+        <div className="flex items-start gap-2 p-3 rounded-lg bg-warning-light dark:bg-warning/10 text-warning-dark dark:text-amber-300 text-sm border border-warning/30 dark:border-warning/20">
+          <Info className="w-4 h-4 mt-0.5 shrink-0" />
+          <p>
+            {unavailableCount} symbol{unavailableCount === 1 ? '' : 's'} show &quot;—&quot; (Unavailable): the free
+            market-data provider doesn&apos;t deliver live quotes for every listing from this server. Prices shown are
+            real where available — StockLab never fabricates prices, and trading is virtual.
+          </p>
+        </div>
+      )}
 
       <div className="flex flex-col md:flex-row gap-3">
         <div className="relative flex-1">

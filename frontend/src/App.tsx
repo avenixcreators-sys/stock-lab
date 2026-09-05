@@ -15,6 +15,7 @@ import Learn from './pages/Learn';
 import LessonDetail from './pages/LessonDetail';
 import Achievements from './pages/Achievements';
 import Profile from './pages/Profile';
+import AiTeacher from './pages/AiTeacher';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -51,6 +52,7 @@ export default function App() {
             <Route path="/learn" element={<ProtectedRoute><Learn /></ProtectedRoute>} />
             <Route path="/learn/achievements" element={<ProtectedRoute><Achievements /></ProtectedRoute>} />
             <Route path="/learn/:slug" element={<ProtectedRoute><LessonDetail /></ProtectedRoute>} />
+            <Route path="/ai-teacher" element={<ProtectedRoute><AiTeacher /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>

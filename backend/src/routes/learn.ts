@@ -1,8 +1,13 @@
 import { Router } from 'express';
-import { v4 as uuidv4 } from 'uuid';
 import db from '../database.js';
 import { AuthRequest } from '../middleware/auth.js';
-import { checkAndAwardBadges } from '../services/achievements.js';
+import {
+  getQuizResult,
+  saveQuizResult,
+  getAchievements,
+  countCompletedLessons,
+  computeAndAwardBadges,
+} from '../services/firestoreStore.js';
 
 const router = Router();
 
@@ -16,7 +21,7 @@ router.get('/lessons', (_req, res) => {
   }
 });
 
-router.get('/lessons/:slug', (req: AuthRequest, res) => {
+router.get('/lessons/:slug', async (req: AuthRequest, res) => {
   try {
     const { slug } = req.params;
     const lesson = db.prepare('SELECT * FROM lessons WHERE slug = ?').get(slug) as any;
@@ -35,8 +40,10 @@ router.get('/lessons/:slug', (req: AuthRequest, res) => {
 
     let quizResult = null;
     if (req.userId) {
-      quizResult = db.prepare('SELECT score, total, completed_at FROM quiz_results WHERE user_id = ? AND lesson_id = ? ORDER BY completed_at DESC LIMIT 1')
-        .get(req.userId, lesson.id);
+      const result = await getQuizResult(req.userId, lesson.id);
+      if (result) {
+        quizResult = { score: result.score, total: result.total, completed_at: null };
+      }
     }
 
     res.json({
@@ -45,12 +52,14 @@ router.get('/lessons/:slug', (req: AuthRequest, res) => {
       quizResult
     });
   } catch (error) {
+    const status = (error as any).status;
+    if (status === 503) return res.status(503).json({ error: (error as Error).message });
     console.error('Lesson detail error:', error);
     res.status(500).json({ error: 'Failed to fetch lesson' });
   }
 });
 
-router.post('/quiz/submit', (req: AuthRequest, res) => {
+router.post('/quiz/submit', async (req: AuthRequest, res) => {
   try {
     const userId = req.userId!;
     const { lessonId, answers } = req.body;
@@ -83,34 +92,35 @@ router.post('/quiz/submit', (req: AuthRequest, res) => {
       };
     });
 
-    db.prepare('INSERT INTO quiz_results (id, user_id, lesson_id, score, total) VALUES (?, ?, ?, ?, ?)')
-      .run(require('uuid').v4(), userId, lessonId, score, questions.length);
+    await saveQuizResult(userId, lessonId, score, questions.length);
 
-    if (score === questions.length) {
-      checkAndAwardBadges(userId);
-    }
-
-    const awarded = checkAndAwardBadges(userId);
+    const awarded = await computeAndAwardBadges(userId);
 
     res.json({ score, total: questions.length, results, newlyAwardedBadges: awarded });
   } catch (error) {
+    const status = (error as any).status;
+    if (status === 503) return res.status(503).json({ error: (error as Error).message });
     console.error('Quiz submit error:', error);
     res.status(500).json({ error: 'Failed to submit quiz' });
   }
 });
 
-router.get('/achievements', (req: AuthRequest, res) => {
+router.get('/achievements', async (req: AuthRequest, res) => {
   try {
     const userId = req.userId!;
-    const achievements = db.prepare('SELECT badge_id, earned_at FROM achievements WHERE user_id = ? ORDER BY earned_at DESC')
-      .all(userId);
-    const completedLessons = db.prepare('SELECT COUNT(DISTINCT lesson_id) as c FROM quiz_results WHERE user_id = ? AND score > 0')
-      .get(userId) as any;
+    const achievements = await getAchievements(userId);
+    const completedLessons = await countCompletedLessons(userId);
+
     res.json({
-      achievements,
-      completedLessons: completedLessons.c
+      achievements: achievements.map((a) => ({
+        badgeId: a.badgeId,
+        earned_at: a.unlockedAt,
+      })),
+      completedLessons,
     });
   } catch (error) {
+    const status = (error as any).status;
+    if (status === 503) return res.status(503).json({ error: (error as Error).message });
     console.error('Achievements error:', error);
     res.status(500).json({ error: 'Failed to fetch achievements' });
   }

@@ -1,4 +1,4 @@
-import { getCurrentAccessToken } from '../supabase';
+import { getCurrentAccessToken } from '../firebase';
 
 export async function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
   const token = await getCurrentAccessToken();
@@ -21,7 +21,8 @@ export function formatINR(amount: number): string {
   }).format(amount);
 }
 
-export function formatCompact(amount: number): string {
+export function formatCompact(amount: number | null | undefined): string {
+  if (amount == null || Number.isNaN(amount)) return '—';
   if (Math.abs(amount) >= 10000000) {
     return `₹${(amount / 10000000).toFixed(2)} Cr`;
   } else if (Math.abs(amount) >= 100000) {
@@ -30,7 +31,8 @@ export function formatCompact(amount: number): string {
   return formatINR(amount);
 }
 
-export function formatPercent(value: number): string {
+export function formatPercent(value: number | null | undefined): string {
+  if (value == null || Number.isNaN(value)) return '—';
   const sign = value >= 0 ? '+' : '';
   return `${sign}${value.toFixed(2)}%`;
 }

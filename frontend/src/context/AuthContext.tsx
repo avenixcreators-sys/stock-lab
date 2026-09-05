@@ -1,5 +1,16 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { supabase, isSupabaseConfigured } from '../supabase';
+import {
+  onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
+  signOut,
+  sendPasswordResetEmail,
+  updateProfile,
+  type User as FirebaseUser,
+} from 'firebase/auth';
+import { auth, isFirebaseConfigured, mapFirebaseError } from '../firebase';
 
 export interface User {
   id: string;
@@ -23,13 +34,25 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-/** Calls the backend to resolve/link/create the StockLab account for a Supabase session. */
-async function syncSession(accessToken: string, fallbackName?: string): Promise<User> {
+interface SessionUser {
+  id: string;
+  email: string;
+  name: string;
+  cashBalance: number;
+  avatarUrl?: string;
+}
+
+/**
+ * Tells the backend (Firebase Admin) to resolve/link/create the StockLab
+ * Firestore account for a Firebase ID token. The backend is the authority for
+ * the virtual cash balance and ensures ₹500 is granted only on first creation.
+ */
+async function syncSession(idToken: string, fallbackName?: string): Promise<SessionUser> {
   const res = await fetch('/api/auth/session', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
+      Authorization: `Bearer ${idToken}`,
     },
     body: fallbackName ? JSON.stringify({ name: fallbackName }) : undefined,
   });
@@ -47,97 +70,106 @@ async function syncSession(accessToken: string, fallbackName?: string): Promise<
   };
 }
 
-function mapSupabaseError(err: unknown): string {
-  const msg = (err as { message?: string } | null)?.message || 'An unexpected error occurred. Please try again.';
-  const lower = msg.toLowerCase();
-  if (lower.includes('already registered') || lower.includes('already been registered')) {
-    return 'An account with this email already exists. Please log in instead.';
+function fromFirebaseUser(fb: FirebaseUser, backend?: SessionUser): SessionUser {
+  return {
+    id: backend?.id ?? fb.uid,
+    email: backend?.email ?? fb.email ?? '',
+    name: backend?.name ?? fb.displayName ?? '',
+    cashBalance: backend?.cashBalance ?? 0,
+    avatarUrl: backend?.avatarUrl ?? fb.photoURL ?? undefined,
+  };
+}
+
+async function getToken(): Promise<string | null> {
+  if (!auth?.currentUser) return null;
+  try {
+    return await auth.currentUser.getIdToken();
+  } catch {
+    return null;
   }
-  if (lower.includes('invalid login credentials') || lower.includes('password')) {
-    return 'Incorrect email or password. Please try again.';
-  }
-  if (lower.includes('not found')) {
-    return 'No account found with this email. Please sign up first.';
-  }
-  if (lower.includes('at least 6 characters') || lower.includes('too short')) {
-    return 'Password should be at least 6 characters.';
-  }
-  if (lower.includes('rate limit') || lower.includes('too many')) {
-    return 'Too many attempts. Please wait a moment and try again.';
-  }
-  if (lower.includes('invalid email')) {
-    return 'Please enter a valid email address.';
-  }
-  return msg;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(isSupabaseConfigured);
+  const [loading, setLoading] = useState(isFirebaseConfigured);
   const [authError, setAuthError] = useState<string | null>(
-    isSupabaseConfigured
+    isFirebaseConfigured
       ? null
-      : 'Supabase authentication is not configured. Please ask the project owner to complete the setup in frontend/.env and backend/.env.'
+      : 'Firebase authentication is not configured. Please ask the project owner to complete the setup in frontend/.env and backend/.env.'
   );
 
   useEffect(() => {
-    if (!supabase) {
+    if (!auth) {
       setLoading(false);
       return;
     }
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
       try {
-        if (session?.access_token) {
-          const u = await syncSession(session.access_token);
-          setUser(u);
+        if (fbUser) {
+          const token = await fbUser.getIdToken();
+          if (token) {
+            const backend = await syncSession(token);
+            setUser(fromFirebaseUser(fbUser, backend));
+          } else {
+            setUser(fromFirebaseUser(fbUser));
+          }
         } else {
           setUser(null);
         }
       } catch {
-        setUser(null);
+        // Backend unavailable — fall back to the Firebase user so the app is
+        // not hard-locked, but data endpoints that need the backend will fail.
+        if (fbUser) setUser(fromFirebaseUser(fbUser));
+        else setUser(null);
       } finally {
         setLoading(false);
       }
     });
-    return () => {
-      listener.subscription.unsubscribe();
-    };
+    return unsubscribe;
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    if (!supabase) throw new Error(authError || 'Supabase not configured');
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw new Error(mapSupabaseError(error));
+    if (!auth) throw new Error(authError || 'Firebase not configured');
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (err) {
+      throw new Error(mapFirebaseError(err));
+    }
   }, [authError]);
 
   const register = useCallback(async (email: string, password: string, name: string) => {
-    if (!supabase) throw new Error(authError || 'Supabase not configured');
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { name } },
-    });
-    if (error) throw new Error(mapSupabaseError(error));
-
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError) throw new Error(mapSupabaseError(sessionError));
-    if (sessionData?.session?.access_token) {
-      const u = await syncSession(sessionData.session.access_token, name);
-      setUser(u);
+    if (!auth) throw new Error(authError || 'Firebase not configured');
+    const cleanName = (name || '').trim();
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      try {
+        await updateProfile(cred.user, { displayName: cleanName });
+      } catch {
+        // profile update is best-effort; syncSession will set the name too
+      }
+      const token = await getToken();
+      if (token) {
+        const backend = await syncSession(token, cleanName);
+        setUser(fromFirebaseUser(cred.user, backend));
+      } else {
+        setUser(fromFirebaseUser(cred.user));
+      }
+    } catch (err) {
+      throw new Error(mapFirebaseError(err));
     }
   }, [authError]);
 
   const loginWithGoogle = useCallback(async () => {
-    if (!supabase) throw new Error(authError || 'Supabase not configured');
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: window.location.origin },
-    });
-    if (error) throw new Error(mapSupabaseError(error));
+    if (!auth) throw new Error(authError || 'Firebase not configured');
+    try {
+      await signInWithPopup(auth, new GoogleAuthProvider());
+    } catch (err) {
+      throw new Error(mapFirebaseError(err));
+    }
   }, [authError]);
 
   const logout = useCallback(async () => {
-    if (supabase) await supabase.auth.signOut();
+    if (auth) await signOut(auth);
     setUser(null);
   }, []);
 
@@ -146,11 +178,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const sendResetPassword = useCallback(async (email: string) => {
-    if (!supabase) throw new Error(authError || 'Supabase not configured');
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin + '/reset-password',
-    });
-    if (error) throw new Error(mapSupabaseError(error));
+    if (!auth) throw new Error(authError || 'Firebase not configured');
+    try {
+      await sendPasswordResetEmail(auth, email);
+    } catch (err) {
+      throw new Error(mapFirebaseError(err));
+    }
   }, [authError]);
 
   return (

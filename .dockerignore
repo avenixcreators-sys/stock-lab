@@ -1,0 +1,13 @@
+.git
+*.db
+*.db-journal
+backend/node_modules
+frontend/node_modules
+backend/dist
+frontend/dist
+.env
+.env.*
+!.env.example
+!.env.production
+node_modules
+npm-debug.log

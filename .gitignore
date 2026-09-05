@@ -2,6 +2,8 @@
 .env
 .env.*
 !.env.example
+# frontend/.env.production holds ONLY the public Firebase web config
+!/frontend/.env.production
 
 # Dependencies
 node_modules/
@@ -21,6 +23,10 @@ Thumbs.db
 *.db
 *.db-shm
 *.db-wal
+*.db.bak-*
+
+# Firebase CLI local cache
+.firebase/
 
 # TypeScript cache
 *.tsbuildinfo

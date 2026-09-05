@@ -4,6 +4,7 @@ import { createMarketDataProvider, isMarketDataConfigured } from './providers/in
 
 interface MarketQuote {
   symbol: string;
+  qualifiedSymbol: string;
   price: number | null;
   change: number;
   changePercent: number;
@@ -19,6 +20,9 @@ interface MarketQuote {
 interface HistoricalPoint {
   date: string;
   price: number;
+  open?: number | null;
+  high?: number | null;
+  low?: number | null;
   volume?: number | null;
 }
 
@@ -76,6 +80,12 @@ function nowIso(): string {
 function providerSymbolFor(stock: any): string | null {
   if (!stock) return null;
   return stock.provider_symbol || stock.symbol || null;
+}
+
+/** Exchange-qualified symbol identity, e.g. `NSE:RELIANCE`. Non-breaking: the
+ *  existing `symbol` field is preserved for the trade/watchlist/URL flows. */
+function qualifiedSymbol(exchange: string | null | undefined, symbol: string): string {
+  return exchange ? `${exchange.toUpperCase()}:${symbol}` : symbol;
 }
 
 function splitProviderSymbol(providerSymbol: string): string {
@@ -155,6 +165,7 @@ export function getQuote(symbol: string): MarketQuote | null {
   const quote: MarketQuote = row
     ? {
         symbol: upper,
+        qualifiedSymbol: qualifiedSymbol(stock?.exchange, upper),
         price: row.price,
         change: row.change_amount ?? 0,
         changePercent: row.change_percent ?? 0,
@@ -168,6 +179,7 @@ export function getQuote(symbol: string): MarketQuote | null {
       }
     : {
         symbol: upper,
+        qualifiedSymbol: qualifiedSymbol(stock?.exchange, upper),
         price: null,
         change: 0,
         changePercent: 0,
@@ -209,6 +221,62 @@ function maybeRefresh(symbol: string, providerSymbol: string, provider: MarketDa
 }
 
 /**
+ * Bulk refresh of legitimate quotes for many symbols, with bounded concurrency.
+ * Unlike the on-demand single-symbol refresh, this is used (sparingly) to seed
+ * the market list with REAL provider prices. It never fabricates data: symbols
+ * that fail to fetch simply keep their stored status (UNAVAILABLE).
+ */
+const BACKFILL_CONCURRENCY = 8;
+export async function refreshAllQuotes(options?: { force?: boolean; onBatch?: (done: number, total: number) => void }): Promise<{
+  refreshed: number;
+  failed: number;
+}> {
+  const provider = getProvider();
+  if (!provider) return { refreshed: 0, failed: 0 };
+  const p: MarketDataProvider = provider;
+
+  const stocks = db.prepare('SELECT symbol, provider_symbol FROM stocks WHERE provider_symbol IS NOT NULL').all() as any[];
+  const now = Date.now();
+  const todo = stocks.filter(s =>
+    options?.force || (now - (lastRefreshed.get(s.symbol) || 0) >= REFRESH_MS)
+  );
+  if (todo.length === 0) return { refreshed: 0, failed: 0 };
+
+  let refreshed = 0;
+  let failed = 0;
+  let done = 0;
+  const total = todo.length;
+
+  async function worker(): Promise<void> {
+    for (;;) {
+      const item = todo.pop();
+      if (!item) return;
+      try {
+        const q = await p.getQuote(item.provider_symbol);
+        if (q && q.price != null) {
+          storeQuote(item.symbol, { ...q, status: q.status });
+          lastRefreshed.set(item.symbol, Date.now());
+          refreshed++;
+          console.log(`[market] ${item.symbol} @ ${q.price}`);
+        } else {
+          // Silently unavailable — do NOT mark lastRefreshed so it retries later.
+          failed++;
+        }
+      } catch (e) {
+        console.error(`[market] fetch failed ${item.symbol}:`, (e as Error).message);
+        failed++;
+      } finally {
+        done++;
+        if (options?.onBatch && done % 10 === 0) options.onBatch(done, total);
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(BACKFILL_CONCURRENCY, todo.length) }, worker));
+  return { refreshed, failed };
+}
+
+/**
  * All quotes with pagination. Local-first; no external call on list views.
  */
 export function getAllQuotes(limit = 100, offset = 0): any[] {
@@ -229,6 +297,7 @@ export function getAllQuotes(limit = 100, offset = 0): any[] {
 
   const quotes = rows.map(r => ({
     symbol: r.symbol,
+    qualifiedSymbol: qualifiedSymbol(r.exchange, r.symbol),
     name: r.name,
     sector: r.sector,
     exchange: r.exchange,
@@ -265,6 +334,7 @@ const MIN_SEARCH_LENGTH = 2;
 function mapRow(r: any) {
   return {
     symbol: r.symbol,
+    qualifiedSymbol: qualifiedSymbol(r.exchange, r.symbol),
     name: r.name,
     sector: r.sector,
     exchange: r.exchange,
@@ -440,6 +510,7 @@ export function getStockDetails(symbol: string): any | null {
   const quote = getQuote(symbol.toUpperCase());
   return {
     ...row,
+    qualifiedSymbol: qualifiedSymbol(row.exchange, row.symbol),
     price: quote?.price ?? row.price ?? null,
     change_amount: quote?.change ?? row.change_amount ?? 0,
     change_percent: quote?.changePercent ?? row.change_percent ?? 0,
@@ -487,23 +558,39 @@ export async function getHistoricalData(symbol: string, days: number): Promise<H
 function readHistory(symbol: string, days: number): HistoricalPoint[] {
   const rows = db
     .prepare(
-      'SELECT date, price, volume FROM price_history WHERE symbol = ? ORDER BY date DESC LIMIT ?'
+      'SELECT date, price, open, high, low, volume FROM price_history WHERE symbol = ? ORDER BY date DESC LIMIT ?'
     )
     .all(symbol, days) as any[];
   return rows
-    .map(r => ({ date: r.date, price: r.price as number, volume: (r.volume as number) ?? null }))
+    .map(r => ({
+      date: r.date,
+      price: r.price as number,
+      open: (r.open as number) ?? null,
+      high: (r.high as number) ?? null,
+      low: (r.low as number) ?? null,
+      volume: (r.volume as number) ?? null,
+    }))
     .reverse();
 }
 
 /** Persist provider historical points (deduped on symbol + date). */
 function storeHistory(symbol: string, points: HistoricalPoint[], source: string): void {
   const insert = db.prepare(
-    `INSERT OR IGNORE INTO price_history (symbol, date, price, volume, source)
-     VALUES (@symbol, @date, @price, @volume, @source)`
+    `INSERT OR IGNORE INTO price_history (symbol, date, price, open, high, low, volume, source)
+     VALUES (@symbol, @date, @price, @open, @high, @low, @volume, @source)`
   );
   const run = db.transaction((pts: HistoricalPoint[]) => {
     for (const p of pts) {
-      insert.run({ symbol, date: p.date, price: p.price, volume: p.volume ?? null, source });
+      insert.run({
+        symbol,
+        date: p.date,
+        price: p.price,
+        open: p.open ?? null,
+        high: p.high ?? null,
+        low: p.low ?? null,
+        volume: p.volume ?? null,
+        source,
+      });
     }
   });
   run(points);
@@ -515,3 +602,83 @@ export const marketDataStatus = {
   CACHED: 'CACHED',
   UNAVAILABLE: 'UNAVAILABLE',
 } as const;
+
+// ---------------------------------------------------------------------------
+// Market status (NSE / BSE — Asia/Kolkata, IST)
+// ---------------------------------------------------------------------------
+
+const MARKET_TIMEZONE = 'Asia/Kolkata';
+const MARKET_OPEN_MINUTES = 9 * 60 + 15; // 9:15 AM IST
+const MARKET_CLOSE_MINUTES = 15 * 60 + 30; // 3:30 PM IST
+const WEEKEND = new Set([0, 6]); // Sunday, Saturday
+
+function toKolkataParts(date: Date): { ymd: string; minutesOfDay: number; weekday: number; iso: string } {
+  const iso = new Intl.DateTimeFormat('en-CA', {
+    timeZone: MARKET_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(date);
+  const [datePart, timePart] = iso.split(', ');
+  const [y, m, d] = datePart.trim().split('-').map(Number);
+  const [h, min] = timePart.trim().split(':').map(Number);
+  const weekday = new Intl.DateTimeFormat('en-US', { timeZone: MARKET_TIMEZONE, weekday: 'short' }).format(date);
+  const weekdayNum = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].indexOf(weekday.toUpperCase());
+  return { ymd: `${y}-${m}-${d}`, minutesOfDay: h * 60 + min, weekday: weekdayNum, iso: `${datePart}T${timePart}:00+05:30` };
+}
+
+export interface MarketStatus {
+  isOpen: boolean;
+  /** Non-trading days / hours — informational only, not a fake-price signal. */
+  reason: 'open' | 'pre-market' | 'after-hours' | 'weekend' | 'holiday';
+  /** Opening session for the current week. */
+  sessionOpen: string | null;
+  sessionClose: string | null;
+  lastUpdated: string;
+  /** True when the scheduler has legitimate live data to serve. */
+  dataAvailable: boolean;
+}
+
+/**
+ * Reports whether the Indian equity market is currently open, in IST.
+ * This only reflects exchange trading hours — it does NOT fabricate prices.
+ */
+export function getMarketStatus(): MarketStatus {
+  const now = new Date();
+  const k = toKolkataParts(now);
+  const lastUpdated = now.toISOString();
+
+  const anyLive = db
+    .prepare(
+      `SELECT COUNT(*) c FROM market_data WHERE quote_time IS NOT NULL
+       AND data_status IN ('LIVE','DELAYED')`
+    )
+    .get() as { c: number };
+
+  let reason: MarketStatus['reason'];
+  if (WEEKEND.has(k.weekday)) {
+    reason = 'weekend';
+  } else if (k.minutesOfDay < MARKET_OPEN_MINUTES) {
+    reason = 'pre-market';
+  } else if (k.minutesOfDay > MARKET_CLOSE_MINUTES) {
+    reason = 'after-hours';
+  } else {
+    reason = 'open';
+  }
+
+  const sessionOpen = `${k.ymd}T09:15:00+05:30`;
+  const sessionClose = `${k.ymd}T15:30:00+05:30`;
+
+  return {
+    isOpen: reason === 'open',
+    reason,
+    sessionOpen: !WEEKEND.has(k.weekday) ? sessionOpen : null,
+    sessionClose: !WEEKEND.has(k.weekday) ? sessionClose : null,
+    lastUpdated,
+    dataAvailable: anyLive.c > 0,
+  };
+}

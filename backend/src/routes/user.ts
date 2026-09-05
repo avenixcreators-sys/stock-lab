@@ -1,80 +1,98 @@
 import { Router } from 'express';
-import db from '../database.js';
 import { AuthRequest } from '../middleware/auth.js';
+import {
+  getUser,
+  updateUserProfile,
+  getTransactions,
+  getAchievements,
+  getHoldings,
+  countCompletedLessons,
+} from '../services/firestoreStore.js';
 
 const router = Router();
 
-router.get('/profile', (req: AuthRequest, res) => {
+router.get('/profile', async (req: AuthRequest, res) => {
   try {
-    const user = db.prepare('SELECT id, email, name, avatar_url, cash_balance, created_at FROM users WHERE id = ?')
-      .get(req.userId!) as any;
+    const user = await getUser(req.userId!);
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const transactionCount = db.prepare('SELECT COUNT(*) as c FROM transactions WHERE user_id = ?').get(req.userId!) as any;
-    const achievements = db.prepare('SELECT COUNT(*) as c FROM achievements WHERE user_id = ?').get(req.userId!) as any;
-    const quizResults = db.prepare('SELECT COUNT(DISTINCT lesson_id) as c FROM quiz_results WHERE user_id = ? AND score > 0').get(req.userId!) as any;
+    const [transactions, achievements, lessonsCompleted] = await Promise.all([
+      getTransactions(req.userId!, '', 200).then((t) => t.length),
+      getAchievements(req.userId!).then((a) => a.length),
+      countCompletedLessons(req.userId!),
+    ]);
 
     res.json({
       id: user.id,
       email: user.email,
-      name: user.name,
-      avatarUrl: user.avatar_url,
-      cashBalance: user.cash_balance,
-      createdAt: user.created_at,
+      name: user.displayName,
+      avatarUrl: user.avatarUrl,
+      cashBalance: user.cashBalance,
+      createdAt: user.createdAt,
       stats: {
-        transactions: transactionCount.c,
-        achievements: achievements.c,
-        lessonsCompleted: quizResults.c
-      }
+        transactions,
+        achievements,
+        lessonsCompleted,
+      },
     });
   } catch (error) {
+    const status = (error as any).status;
+    if (status === 503) return res.status(503).json({ error: (error as Error).message });
     console.error('Profile error:', error);
     res.status(500).json({ error: 'Failed to fetch profile' });
   }
 });
 
-router.put('/profile', (req: AuthRequest, res) => {
+router.put('/profile', async (req: AuthRequest, res) => {
   try {
     const { name } = req.body;
     if (!name || name.trim().length === 0) {
       return res.status(400).json({ error: 'Name is required' });
     }
 
-    db.prepare(`UPDATE users SET name = ?, updated_at = datetime('now') WHERE id = ?`)
-      .run(name.trim(), req.userId!);
-
+    await updateUserProfile(req.userId!, name.trim());
     res.json({ success: true, name: name.trim() });
   } catch (error) {
+    const status = (error as any).status;
+    if (status === 503) return res.status(503).json({ error: (error as Error).message });
     console.error('Profile update error:', error);
     res.status(500).json({ error: 'Failed to update profile' });
   }
 });
 
-router.get('/stats', (req: AuthRequest, res) => {
+router.get('/stats', async (req: AuthRequest, res) => {
   try {
     const userId = req.userId!;
-    const user = db.prepare('SELECT cash_balance FROM users WHERE id = ?').get(userId) as any;
-    const holdings = db.prepare('SELECT * FROM holdings WHERE user_id = ? AND quantity > 0').all(userId) as any[];
-    const transactions = db.prepare('SELECT COUNT(*) as c FROM transactions WHERE user_id = ?').get(userId) as any;
-    const achievements = db.prepare('SELECT COUNT(*) as c FROM achievements WHERE user_id = ?').get(userId) as any;
-    const quizResults = db.prepare('SELECT COUNT(DISTINCT lesson_id) as c FROM quiz_results WHERE user_id = ? AND score > 0').get(userId) as any;
+    const [user, holdings, transactions, achievements, lessonsCompleted] = await Promise.all([
+      getUser(userId),
+      getHoldings(userId),
+      getTransactions(userId, '', 200),
+      getAchievements(userId),
+      countCompletedLessons(userId),
+    ]);
 
-    const totalShares = holdings.reduce((sum: number, h: any) => sum + h.quantity, 0);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const totalShares = holdings.reduce((sum, h) => sum + h.quantity, 0);
     const uniqueStocks = holdings.length;
 
     res.json({
-      cashBalance: user.cash_balance,
+      cashBalance: user.cashBalance,
       totalShares,
       uniqueStocks,
-      totalTransactions: transactions.c,
-      totalAchievements: achievements.c,
-      lessonsCompleted: quizResults.c,
-      memberSince: db.prepare('SELECT created_at FROM users WHERE id = ?').get(userId)
+      totalTransactions: transactions.length,
+      totalAchievements: achievements.length,
+      lessonsCompleted,
+      memberSince: user.createdAt,
     });
   } catch (error) {
+    const status = (error as any).status;
+    if (status === 503) return res.status(503).json({ error: (error as Error).message });
     console.error('Stats error:', error);
     res.status(500).json({ error: 'Failed to fetch stats' });
   }

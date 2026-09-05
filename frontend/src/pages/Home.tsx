@@ -45,7 +45,10 @@ export default function Home() {
       ]);
 
       if (!portfolioRes.ok || !txRes.ok || !wlRes.ok) {
-        throw new Error('Failed to load data');
+        const failed = [portfolioRes, txRes, wlRes].find(r => !r.ok);
+        let detail = '';
+        try { detail = (await failed?.json())?.error || ''; } catch { /* ignore */ }
+        throw new Error(detail || 'Failed to load data');
       }
 
       const [portfolioData, txData, wlData] = await Promise.all([portfolioRes.json(), txRes.json(), wlRes.json()]);
@@ -94,11 +97,11 @@ export default function Home() {
       <div className="flex items-center justify-between gap-4 p-3 bg-gradient-to-r from-primary-50 to-emerald-50 dark:from-primary-950/30 dark:to-emerald-950/30 rounded-xl">
         <div className="flex items-center gap-2 text-xs text-primary-700 dark:text-primary-300">
           <Wallet className="w-4 h-4" />
-          <span>Virtual Cash: {portfolio ? formatCompact(portfolio.cashBalance) : '₹500'} Cash</span>
+          <span>Virtual Cash: {portfolio ? formatCompact(portfolio.cashBalance) : '₹500'}</span>
         </div>
         <div className="flex items-center gap-2 text-xs text-gray-500">
           <Star className="w-4 h-4 text-amber-400" />
-          <span>Simulation Mode</span>
+          <span>Paper Trading Mode</span>
         </div>
       </div>
 
@@ -115,10 +118,10 @@ export default function Home() {
         <div className="card">
           <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
             <Wallet className="w-4 h-4" />
-            Available Cash
+            Available Virtual Cash
           </div>
           <div className="text-2xl font-bold text-gray-900 dark:text-white">
-            {portfolio ? formatCompact(portfolio.cashBalance) : '--'} <span className="text-sm font-normal text-gray-400">Cash</span>
+            {portfolio ? formatCompact(portfolio.cashBalance) : '--'} <span className="text-sm font-normal text-gray-400">Virtual Cash</span>
           </div>
         </div>
         <div className="card">

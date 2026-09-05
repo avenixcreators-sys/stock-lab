@@ -130,8 +130,8 @@ export default function StockDetail() {
       if (!res.ok) throw new Error(data.error);
 
       setTradeSuccess(data.transaction.type === 'buy'
-        ? `Successfully bought ${data.transaction.quantity} shares of ${data.transaction.symbol} for ${formatCompact(data.transaction.totalCost)} Cash`
-        : `Successfully sold ${data.transaction.quantity} shares of ${data.transaction.symbol} for ${formatCompact(data.transaction.totalProceeds)} Cash`
+        ? `Successfully bought ${data.transaction.quantity} shares of ${data.transaction.symbol} for ${formatCompact(data.transaction.totalCost)} Virtual Cash`
+        : `Successfully sold ${data.transaction.quantity} shares of ${data.transaction.symbol} for ${formatCompact(data.transaction.totalProceeds)} Virtual Cash`
       );
       updateUser({ cashBalance: data.newCashBalance });
       setQuantity('');
@@ -148,7 +148,7 @@ export default function StockDetail() {
   if (loading) return <LoadingState text="Loading stock data..." height="h-screen" />;
   if (error || !stock) return <ErrorState message={error || 'Stock not found'} onRetry={loadStock} />;
 
-  const isUp = stock.change_amount >= 0;
+  const isUp = (stock.change_amount ?? 0) >= 0;
   const dataStatus = (stock.data_status || '').toUpperCase();
   const statusBadge =
     dataStatus === 'LIVE' ? 'bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-300 border-green-200 dark:border-green-800'
@@ -317,7 +317,7 @@ export default function StockDetail() {
 
         <div className="card h-fit lg:sticky lg:top-24 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-lg">Simulated Trading</h2>
+            <h2 className="font-semibold text-lg">Paper Trading</h2>
             <div className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
               <ShieldOff className="w-3.5 h-3.5" /> Virtual only
             </div>
@@ -325,7 +325,7 @@ export default function StockDetail() {
 
           <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800 space-y-2">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-500">Available Cash</span>
+              <span className="text-gray-500">Available Virtual Cash</span>
               <span className="font-semibold flex items-center gap-1">
                 <Wallet className="w-3.5 h-3.5 text-primary-500" />
                 {portfolio ? formatCompact(portfolio.cashBalance) : user ? formatCompact(user.cashBalance) : '--'}
@@ -399,12 +399,12 @@ export default function StockDetail() {
                 {tradeType === 'buy' ? (
                   <div className="flex justify-between items-center">
                     <span className="text-gray-500">Estimated total cost</span>
-                    <span className="font-semibold text-lg">{formatCompact(totalCost)} Cash</span>
+                    <span className="font-semibold text-lg">{formatCompact(totalCost)} Virtual Cash</span>
                   </div>
                 ) : (
                   <div className="flex justify-between items-center">
                     <span className="text-gray-500">Estimated proceeds</span>
-                    <span className="font-semibold text-lg">{formatCompact(totalProceeds)} Cash</span>
+                    <span className="font-semibold text-lg">{formatCompact(totalProceeds)} Virtual Cash</span>
                   </div>
                 )}
               </div>
@@ -429,7 +429,7 @@ export default function StockDetail() {
               </button>
 
               {tradeType === 'buy' && totalCost > 0 && !canAfford && (
-                <p className="text-xs text-danger text-center">Insufficient cash. You need {formatCompact(totalCost)} but have {portfolio ? formatCompact(portfolio.cashBalance) : '--'}.</p>
+                <p className="text-xs text-danger text-center">Insufficient Virtual Cash. You need {formatCompact(totalCost)} but have {portfolio ? formatCompact(portfolio.cashBalance) : '--'}.</p>
               )}
               {tradeType === 'sell' && Number(quantity) > ownedQty && (
                 <p className="text-xs text-danger text-center">You can't sell more than the {ownedQty} shares you own.</p>
@@ -438,7 +438,7 @@ export default function StockDetail() {
           )}
 
           <p className="text-xs text-gray-400 leading-relaxed">
-            This is a simulated transaction using virtual Cash. No real money is involved.
+            This is a paper-trading transaction using Virtual Cash. No real money is involved.
           </p>
         </div>
       </div>

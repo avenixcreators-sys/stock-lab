@@ -43,7 +43,10 @@ export function EmptyState({ icon: Icon, title, subtitle, action }: {
   );
 }
 
-export function ChangeIndicator({ change, className = '' }: { change: number; className?: string }) {
+export function ChangeIndicator({ change, className = '' }: { change: number | null; className?: string }) {
+  if (change == null || Number.isNaN(change)) {
+    return <span className={`inline-flex items-center gap-1 text-gray-400 ${className}`}>--</span>;
+  }
   const isUp = change >= 0;
   return (
     <span className={`inline-flex items-center gap-1 ${isUp ? 'stock-green' : 'stock-red'} ${className}`}>

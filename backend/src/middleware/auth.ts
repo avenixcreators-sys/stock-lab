@@ -1,10 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
-import db from '../database.js';
-import { verifySupabaseToken, isSupabaseReady } from '../services/supabase.js';
+import { verifyFirebaseToken, isFirebaseReady } from '../services/firebase.js';
+import { getOrCreateUser, StoreUser } from '../services/firestoreStore.js';
 
 export interface AuthRequest extends Request {
   userId?: string;
-  supabaseUid?: string;
+  firebaseUid?: string;
 }
 
 export function extractBearerToken(req: Request): string | null {
@@ -16,74 +16,38 @@ export function extractBearerToken(req: Request): string | null {
   return null;
 }
 
-interface SupabaseUser {
+export interface VerifiedIdentity {
   id: string;
   email?: string;
-  user_metadata?: Record<string, unknown>;
-  app_metadata?: Record<string, unknown>;
-}
-
-function metaString(meta: Record<string, unknown> | undefined, key: string): string | undefined {
-  const value = meta?.[key];
-  return typeof value === 'string' && value ? value : undefined;
+  name?: string;
+  picture?: string;
+  provider?: string;
 }
 
 /**
- * Resolves (or lazily creates) the StockLab user record that corresponds to a
- * verified Supabase account. The Supabase Auth user id is the primary
- * identifier: new users are stored with `id = supabaseUserId`, and legacy rows
- * (created before Supabase was introduced) are linked by e-mail.
- *
- * Returns the fresh user row (never the client-supplied id itself).
+ * Verifies a Firebase ID token and resolves/creates the user's Firestore
+ * profile. The Firestore balance is initialized to ₹500 only on first creation
+ * and is never reset on subsequent logins.
  */
-export function upsertUser(decoded: SupabaseUser, fallbackName?: string): any {
-  const uid = decoded.id;
-  const email = (decoded.email || '').trim().toLowerCase() || `${uid}@stocklab.invalid`;
-  const provider =
-    (decoded.app_metadata?.provider as string) || 'password';
-
-  let user = db.prepare('SELECT * FROM users WHERE firebase_uid = ?').get(uid) as any;
-
-  if (!user && decoded.email) {
-    user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
-    if (user) {
-      db.prepare(
-        `UPDATE users
-         SET firebase_uid = ?, provider = COALESCE(provider, ?), updated_at = datetime('now')
-         WHERE id = ?`
-      ).run(uid, provider, user.id);
-    }
-  }
-
-  const name = metaString(decoded.user_metadata, 'name') || metaString(decoded.user_metadata, 'full_name');
-  const picture = metaString(decoded.user_metadata, 'avatar_url') || metaString(decoded.user_metadata, 'picture');
-
-  if (!user) {
-    const id = uid;
-    const displayName = fallbackName || name || email || 'Trader';
-    db.prepare(
-      `INSERT INTO users (id, email, name, firebase_uid, provider, avatar_url, cash_balance, created_at, updated_at, last_login_at)
-       VALUES (?, ?, ?, ?, ?, ?, 500.0, datetime('now'), datetime('now'), datetime('now'))`
-    ).run(id, email, displayName, uid, provider, picture || null);
-  } else {
-    const resolvedPicture = picture || user.avatar_url;
-    const resolvedName = fallbackName || name || user.name;
-    db.prepare(
-      `UPDATE users
-       SET firebase_uid = ?, provider = COALESCE(provider, ?), avatar_url = ?, name = ?,
-           last_login_at = datetime('now'), updated_at = datetime('now')
-       WHERE id = ?`
-    ).run(uid, provider, resolvedPicture || null, resolvedName, user.id);
-  }
-
-  return db.prepare('SELECT * FROM users WHERE id = ?').get(user ? user.id : uid) as any;
+export async function resolveUser(token: string, fallbackName?: string): Promise<{ identity: VerifiedIdentity; user: StoreUser }> {
+  const decoded = await verifyFirebaseToken(token);
+  const name = fallbackName || decoded.name;
+  const user = await getOrCreateUser(decoded.uid, {
+    email: decoded.email,
+    name,
+    photoURL: decoded.picture,
+  });
+  return {
+    identity: { id: decoded.uid, email: decoded.email, name: decoded.name, picture: decoded.picture, provider: decoded.provider },
+    user,
+  };
 }
 
-/** Full authentication: requires a valid Supabase access token and resolves the user row. */
+/** Full authentication: requires a valid Firebase ID token and resolves the user profile. */
 export async function authenticateToken(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
-  if (!isSupabaseReady()) {
+  if (!isFirebaseReady()) {
     res.status(503).json({
-      error: 'Authentication is not configured on this server. Please finish the Supabase setup in backend/.env.',
+      error: 'Authentication is not configured on this server. Please finish the Firebase setup in backend/.env.',
     });
     return;
   }
@@ -95,12 +59,21 @@ export async function authenticateToken(req: AuthRequest, res: Response, next: N
   }
 
   try {
-    const decoded = await verifySupabaseToken(token);
-    const user = upsertUser(decoded);
-    req.userId = user.id;
-    req.supabaseUid = decoded.id;
+    const { identity } = await resolveUser(token);
+    req.userId = identity.id;
+    req.firebaseUid = identity.id;
     next();
-  } catch {
+  } catch (err) {
+    // A valid token that fails because the database (Firestore) is unavailable
+    // must NOT be reported as an auth failure — that hides the real problem and
+    // shows misleading "Failed to load data" errors in the UI.
+    const msg = (err as Error)?.message || '';
+    if (/firestore|database|datastore|permission.denied|api.*disabled|cloud\.google/i.test(msg)) {
+      res.status(503).json({
+        error: 'StockLab\'s database is currently unavailable. Please contact the administrator. (' + msg + ')',
+      });
+      return;
+    }
     res.status(401).json({ error: 'Invalid or expired session. Please sign in again.' });
   }
 }
@@ -111,14 +84,13 @@ export async function authenticateToken(req: AuthRequest, res: Response, next: N
  * signed-in users (e.g. the watchlist flag on stock details).
  */
 export async function optionalAuth(req: AuthRequest, _res: Response, next: NextFunction): Promise<void> {
-  if (isSupabaseReady()) {
+  if (isFirebaseReady()) {
     const token = extractBearerToken(req);
     if (token) {
       try {
-        const decoded = await verifySupabaseToken(token);
-        const user = upsertUser(decoded);
-        req.userId = user.id;
-        req.supabaseUid = decoded.id;
+        const { identity } = await resolveUser(token);
+        req.userId = identity.id;
+        req.firebaseUid = identity.id;
       } catch {
         // ignore invalid tokens on public endpoints
       }

@@ -93,11 +93,11 @@ export default function Portfolio() {
             <Briefcase className="w-4 h-4" /> Total Portfolio Value
           </div>
           <div className="text-3xl font-bold text-gray-900 dark:text-white">{formatCompact(portfolio.portfolioValue)}</div>
-          <div className="mt-2 text-sm text-gray-500">Cash + Holdings</div>
+          <div className="mt-2 text-sm text-gray-500">Virtual Cash + Holdings</div>
         </div>
         <div className="card">
           <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
-            <Wallet className="w-4 h-4" /> Available Cash
+            <Wallet className="w-4 h-4" /> Available Virtual Cash
           </div>
           <div className="text-2xl font-bold text-gray-900 dark:text-white">{formatCompact(portfolio.cashBalance)}</div>
           <div className="mt-2 text-xs text-gray-400">Virtual Cash</div>
@@ -213,7 +213,7 @@ export default function Portfolio() {
                 </div>
                 <div className="mt-4 space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Cash</span>
+                    <span className="text-gray-500">Virtual Cash</span>
                     <span className="font-medium">{formatCompact(portfolio.cashBalance)}</span>
                   </div>
                   <div className="flex justify-between text-sm">
@@ -231,7 +231,7 @@ export default function Portfolio() {
         <EmptyState
           icon={Briefcase}
           title="Your portfolio is empty"
-          subtitle="Start building your virtual investment portfolio by buying stocks with your ₹500 Cash."
+          subtitle="Start building your virtual investment portfolio by buying stocks with your ₹500 Virtual Cash."
           action={<Link to="/markets" className="btn-primary">Explore Stocks</Link>}
         />
       )}

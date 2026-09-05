@@ -23,14 +23,17 @@ export default function Disclaimer({ variant = 'full' }: { variant?: 'full' | 'b
     <div className="max-w-6xl mx-auto px-4 py-4">
       <div className="disclaimer-banner flex items-start gap-3">
         <Share2 className="w-5 h-5 shrink-0 mt-0.5" />
-        <div>
-          <p className="font-medium mb-1">Demo Market — Educational Simulation Disclaimer</p>
+        <div className="space-y-1">
+          <p className="font-medium mb-1">Demo Market — Educational Simulation Disclaimer &amp; Privacy</p>
           <p className="text-sm opacity-90">
-            StockLab is an educational stock-market simulator (Demo Market). Prices come from a
-            legitimate market-data provider and may be delayed or last-known prices; they are not
-            intended as investment advice. All money and trades are virtual.
-            This app does not execute real trades or provide a brokerage account. No real money is
-            involved anywhere in this application.
+            StockLab is a <strong>paper-trading simulator</strong>. All money and trades are virtual and have
+            <strong> no real monetary value</strong> — this app does not execute real trades, provide a brokerage
+            account, or handle real money. Stock prices come from a real market-data provider and are for education
+            only; they may be delayed or last-known and are not investment advice.
+          </p>
+          <p className="text-sm opacity-90">
+            <strong>Privacy</strong>: StockLab doesn&apos;t sell your personal data. It uses no advertising or third-party
+            ad trackers.
           </p>
         </div>
       </div>

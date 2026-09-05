@@ -1,11 +1,37 @@
 import Database from 'better-sqlite3';
+import type { Database as DatabaseType } from 'better-sqlite3';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dbPath = path.join(__dirname, '..', 'stocklab.db');
+const bundleDbPath = path.join(__dirname, '..', 'stocklab.db');
 
-const db = new Database(dbPath);
+/**
+ * Serverless runtimes (Cloud Functions/Cloud Run) mount the code directory
+ * read-only, so a DB file next to the bundle cannot be created/opened for
+ * writes. Fall back to the writable /tmp volume in that case. The market-data
+ * cache is per-instance; symbols are re-fetched from the provider while the
+ * instance is warm.
+ */
+function resolveDbPath(): string {
+  if (process.env.DATABASE_PATH) return process.env.DATABASE_PATH;
+  // Cloud Functions (Gen2, runs on Cloud Run) and the emulator mount the code
+  // dir read-only; the writable per-instance volume is /tmp.
+  if (process.env.K_SERVICE || process.env.FUNCTIONS_EMULATOR || process.env.FIREBASE_CONFIG) {
+    return '/tmp/stocklab.db';
+  }
+  try {
+    fs.accessSync(path.dirname(bundleDbPath), fs.constants.W_OK);
+    return bundleDbPath;
+  } catch {
+    return '/tmp/stocklab.db';
+  }
+}
+
+const dbPath = resolveDbPath();
+
+const db: DatabaseType = new Database(dbPath);
 
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
@@ -31,6 +57,7 @@ function runMigrations(): void {
 
   // Stock discovery / real market-data fields.
   addColumnIfMissing('stocks', 'exchange', 'TEXT');
+  addColumnIfMissing('stocks', 'demo_base_price', 'REAL');
   addColumnIfMissing('stocks', 'provider', 'TEXT');
   addColumnIfMissing('stocks', 'provider_symbol', 'TEXT');
   addColumnIfMissing('stocks', 'country', 'TEXT');
@@ -91,6 +118,7 @@ export function initializeDatabase() {
       dividend_yield REAL,
       fifty_two_week_high REAL,
       fifty_two_week_low REAL,
+      demo_base_price REAL,
       last_updated TEXT DEFAULT (datetime('now')),
       exchange TEXT,
       provider TEXT,
@@ -1961,42 +1989,17 @@ function seedStocks() {
             datetime('now'))
   `);
 
-  const stocksHaveData = db.prepare('SELECT COUNT(*) as c FROM market_data WHERE symbol = ?');
-
-  const insertMarketData = db.prepare(`
-    INSERT INTO market_data (symbol, price, change_amount, change_percent, volume, high, low, open, previous_close, data_status)
-    VALUES (@symbol, @price, @change_amount, @change_percent, @volume, @high, @low, @open, @previous_close, 'CACHED')
-  `);
-
+  // Seed the instrument reference data ONLY. We do NOT fabricate price rows in
+  // market_data: the `demo_base_price` in this seed list is a static educational
+  // reference, not a real market price. Surfacing it as a quote would present
+  // invented prices as legitimate data. Real prices come exclusively from the
+  // configured provider; when none is available, the UI shows
+  // "Market data temporarily unavailable". See services/marketData.ts.
   db.transaction(() => {
     for (const stock of DEMO_STOCKS) {
       insertStock.run(stock);
-      const existing = stocksHaveData.get(stock.symbol) as any;
-      if (existing.c === 0) {
-        const volume = 500000 + (symbolHash(stock.symbol) % 4500000);
-        insertMarketData.run({
-          symbol: stock.symbol,
-          price: stock.demo_base_price,
-          change_amount: 0,
-          change_percent: 0,
-          volume,
-          high: stock.demo_base_price,
-          low: stock.demo_base_price,
-          open: stock.demo_base_price,
-          previous_close: stock.demo_base_price,
-        });
-      }
     }
   })();
-
-  // Backfill any stock that somehow still lacks a demo base price.
-  db.prepare(`
-    UPDATE stocks SET demo_base_price = COALESCE(
-      demo_base_price,
-      (SELECT price FROM market_data WHERE symbol = stocks.symbol ORDER BY id DESC LIMIT 1),
-      500
-    ) WHERE demo_base_price IS NULL
-  `).run();
 }
 
 function seedLessons() {

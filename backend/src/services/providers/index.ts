@@ -28,7 +28,13 @@ export class CompositeProvider implements MarketDataProvider {
   }
 
   getQuote(providerSymbol: string) {
-    return this.primary.getQuote(providerSymbol);
+    return this.primary.getQuote(providerSymbol).then(async (q) => {
+      // Alpha Vantage returns empty for many NSE symbols; fall back to Yahoo,
+      // which returns real NSE quotes (verified live).
+      if (q && q.price != null) return q;
+      const backup = await this.historyBackup.getQuote(providerSymbol);
+      return backup && backup.price != null ? backup : q;
+    });
   }
 
   async getHistoricalData(providerSymbol: string, days: number): Promise<HistoricalResult> {

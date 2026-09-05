@@ -1,9 +1,19 @@
 import { Router, Response } from 'express';
 import db from '../database.js';
 import { AuthRequest, optionalAuth } from '../middleware/auth.js';
-import { getQuote, getAllQuotes, searchStocks, getStockDetails, getHistoricalData } from '../services/marketData.js';
+import { getQuote, getAllQuotes, searchStocks, getStockDetails, getHistoricalData, getMarketStatus } from '../services/marketData.js';
+import { isInWatchlist } from '../services/firestoreStore.js';
 
 const router = Router();
+
+router.get('/status', (_req, res) => {
+  try {
+    res.json(getMarketStatus());
+  } catch (error) {
+    console.error('Error fetching market status:', error);
+    res.status(500).json({ error: 'Failed to fetch market status' });
+  }
+});
 
 function parsePagination(req: any): { limit: number; offset: number } {
   const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 100, 1), 5000);
@@ -37,7 +47,7 @@ router.get('/stocks/search', async (req, res) => {
   }
 });
 
-router.get('/stocks/:symbol', optionalAuth, (req: AuthRequest, res: Response) => {
+router.get('/stocks/:symbol', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { symbol } = req.params;
     const details = getStockDetails(symbol.toUpperCase());
@@ -48,9 +58,11 @@ router.get('/stocks/:symbol', optionalAuth, (req: AuthRequest, res: Response) =>
 
     let inWatchlist = false;
     if (req.userId) {
-      const wl = db.prepare('SELECT id FROM watchlist WHERE user_id = ? AND symbol = ?')
-        .get(req.userId, symbol.toUpperCase());
-      inWatchlist = !!wl;
+      try {
+        inWatchlist = await isInWatchlist(req.userId, symbol);
+      } catch {
+        inWatchlist = false;
+      }
     }
 
     res.json({
