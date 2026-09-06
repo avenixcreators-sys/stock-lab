@@ -1,12 +1,4 @@
 {
-  "functions": [
-    {
-      "source": "backend",
-      "codebase": "default",
-      "runtime": "nodejs20",
-      "predeploy": ["npm --prefix backend run build"]
-    }
-  ],
   "hosting": {
     "public": "frontend/dist",
     "ignore": [
@@ -15,10 +7,6 @@
       "**/node_modules/**"
     ],
     "rewrites": [
-      {
-        "source": "/api{,/**}",
-        "function": { "functionId": "api", "region": "asia-south1" }
-      },
       {
         "source": "**",
         "destination": "/index.html"

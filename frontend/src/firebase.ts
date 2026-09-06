@@ -3,6 +3,10 @@ import {
   getAuth,
   type Auth,
 } from 'firebase/auth';
+import {
+  getFirestore,
+  type Firestore,
+} from 'firebase/firestore';
 
 /**
  * Firebase client bootstrap.
@@ -37,10 +41,12 @@ export const isFirebaseConfigured = Boolean(
 
 let _app: FirebaseApp | null = null;
 let _auth: Auth | null = null;
+let _db: Firestore | null = null;
 
 if (isFirebaseConfigured) {
   _app = initializeApp(firebaseConfig);
   _auth = getAuth(_app);
+  _db = getFirestore(_app);
 }
 
 /** Firebase app, or null when Firebase is not configured. */
@@ -48,6 +54,9 @@ export const app: FirebaseApp | null = _app;
 
 /** Firebase Auth instance, or null when Firebase is not configured. */
 export const auth: Auth | null = _auth;
+
+/** Firestore instance, or null when Firebase is not configured. */
+export const db: Firestore | null = _db;
 
 /**
  * Converts a Firebase Auth error (message strings) into a cleaner,

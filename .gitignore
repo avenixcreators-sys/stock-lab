@@ -11,6 +11,10 @@ node_modules/
 # Build output
 dist/
 build/
+frontend/dist/
+
+# Backend
+backend/
 
 # Logs
 *.log
