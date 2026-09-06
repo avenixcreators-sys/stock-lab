@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { LineChart, Mail, Lock, User, Loader2, Info, Wallet, ShieldCheck } from 'lucide-react';
+import { Mail, Lock, User, Loader2, Info, Wallet, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function Register() {
@@ -49,9 +49,7 @@ export default function Register() {
       <div className="w-full max-w-md animate-fade-in">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center gap-3 mb-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-primary-700 rounded-2xl flex items-center justify-center shadow-lg">
-              <LineChart className="w-7 h-7 text-white" />
-            </div>
+            <img src="/logo.png" alt="StockLab logo" className="w-[2cm] h-[2cm] rounded-2xl object-cover shadow-lg" />
           </div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Create your account</h1>
           <p className="text-gray-500 dark:text-gray-400">Start your stock market learning journey</p>
@@ -60,7 +58,7 @@ export default function Register() {
         <div className="disclaimer-banner mb-6 flex items-start gap-2">
           <Info className="w-4 h-4 shrink-0 mt-0.5" />
           <p className="text-xs">
-            StockLab is an <strong>educational simulation (Demo Market)</strong>. It does not involve real money,            real trading, or a brokerage account. Every new account receives <strong>₹500 Virtual Cash</strong>.
+            StockLab is an <strong>educational simulation (Demo Market)</strong>. It does not involve real money,            real trading, or a brokerage account. Every new account receives <strong>₹1000 Virtual Cash</strong>.
           </p>
         </div>
 
@@ -165,7 +163,7 @@ export default function Register() {
 
             <div className="flex items-center justify-center gap-4 pt-2">
               <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                <Wallet className="w-4 h-4 text-primary-500" /> ₹500 Virtual Cash
+                <Wallet className="w-4 h-4 text-primary-500" /> ₹1000 Virtual Cash
               </div>
               <div className="flex items-center gap-1.5 text-xs text-gray-400">
                 <ShieldCheck className="w-4 h-4 text-primary-500" /> Simulation Only

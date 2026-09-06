@@ -185,7 +185,7 @@ export default function StockDetail() {
                 <span className="badge bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 border border-blue-200 dark:border-blue-800">{stock.exchange}</span>
               )}
             </div>
-            <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">{stock.sector} Sector</p>
+            <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">{stock.name} · {stock.sector} Sector</p>
           </div>
         </div>
 

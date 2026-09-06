@@ -56,7 +56,7 @@ export default function Portfolio() {
 
   if (loading) return <LoadingState text="Loading your portfolio..." height="h-screen" />;
   if (error) return <ErrorState message={error} onRetry={loadPortfolio} />;
-  if (!portfolio) return null;
+    if (!portfolio || !portfolio.holdings) return <EmptyState icon={Briefcase} title="Something went wrong" subtitle="Unable to load portfolio data." action={<button onClick={loadPortfolio} className="btn-primary">Retry</button>} />;
 
   const adjustedHoldings = [...portfolio.holdings].sort((a, b) => {
     if (sortBy === 'value') return b.currentValue - a.currentValue;
@@ -231,7 +231,7 @@ export default function Portfolio() {
         <EmptyState
           icon={Briefcase}
           title="Your portfolio is empty"
-          subtitle="Start building your virtual investment portfolio by buying stocks with your ₹500 Virtual Cash."
+          subtitle="Start building your virtual investment portfolio by buying stocks with your ₹1000 Virtual Cash."
           action={<Link to="/markets" className="btn-primary">Explore Stocks</Link>}
         />
       )}

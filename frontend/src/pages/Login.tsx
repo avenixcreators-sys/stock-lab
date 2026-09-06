@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { LineChart, Mail, Lock, Loader2, GraduationCap, Wallet, TrendingUp } from 'lucide-react';
+import { Mail, Lock, Loader2, GraduationCap, Wallet, TrendingUp } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export default function Login() {
@@ -65,9 +65,7 @@ export default function Login() {
       <div className="w-full max-w-md animate-fade-in">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center gap-3 mb-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-primary-500 to-primary-700 rounded-2xl flex items-center justify-center shadow-lg">
-              <LineChart className="w-7 h-7 text-white" />
-            </div>
+            <img src="/logo.png" alt="StockLab logo" className="w-[2cm] h-[2cm] rounded-2xl object-cover shadow-lg" />
           </div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Welcome back</h1>
           <p className="text-gray-500 dark:text-gray-400">Log in to your StockLab account</p>
@@ -207,7 +205,7 @@ export default function Login() {
           </div>
           <div className="flex items-center gap-1.5 text-xs text-gray-400">
             <Wallet className="w-4 h-4" />
-            ₹500 Virtual Cash
+            ₹1000 Virtual Cash
           </div>
           <div className="flex items-center gap-1.5 text-xs text-gray-400">
             <TrendingUp className="w-4 h-4" />

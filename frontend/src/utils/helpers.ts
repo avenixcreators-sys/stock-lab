@@ -1,8 +1,9 @@
-import { getCatalog, getQuote, getHistory } from '../services/marketData';
+import { getCatalog, getQuote, getHistory, getQuotesBulk } from '../services/marketData';
 import {
   getPortfolio, getHoldings, getTransactions, getWatchlist,
   addToWatchlist, removeFromWatchlist, executeTrade, getProfile, saveProfile,
 } from '../services/firestore';
+import { getStatus, getHistoryData, clearHistory, chat as groqChat } from '../services/ai';
 import { auth } from '../firebase';
 
 function makeResponse(data: any, status = 200) {
@@ -14,6 +15,7 @@ function errResponse(message: string, status = 400) {
 function uid() { return auth?.currentUser?.uid ?? null; }
 
 export function formatCompact(n: number): string {
+  if (n == null || Number.isNaN(n)) return '--';
   if (Math.abs(n) >= 1e8) return `₹${(n / 1e8).toFixed(2)}Cr`;
   if (Math.abs(n) >= 1e6) return `₹${(n / 1e6).toFixed(2)}M`;
   if (Math.abs(n) >= 1e5) return `₹${(n / 1e5).toFixed(2)}L`;
@@ -22,6 +24,7 @@ export function formatCompact(n: number): string {
   return `₹${n.toFixed(2)}`;
 }
 export function formatPercent(n: number): string {
+  if (n == null || Number.isNaN(n)) return '--%';
   const sign = n >= 0 ? '+' : '';
   return `${sign}${n.toFixed(2)}%`;
 }
@@ -32,7 +35,8 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
   const [p, ...rest] = path.split('?');
   const params = new URLSearchParams(rest.join('?'));
   const parts = p.split('/').filter(Boolean);
-  const body = options.body ? (typeof options.body === 'string' ? JSON.parse(options.body) : options.body) : null;
+  let body: any = null;
+  try { if (options.body) { body = typeof options.body === 'string' ? JSON.parse(options.body) : options.body; } } catch {}
 
   try {
     // ---- Market ----
@@ -40,8 +44,16 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
       const q = (params.get('q') || '').toLowerCase();
       const catalog = await getCatalog();
       const filtered = q ? catalog.filter((s: any) => s.symbol.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)) : catalog;
-      const stocks = filtered.slice(0, parseInt(params.get('limit') || '5000')).map((s: any) => ({ ...s, price: null, change: 0, changePercent: 0 }));
-      return makeResponse(stocks);
+      const slice = filtered.slice(0, parseInt(params.get('limit') || '5000'));
+      const withPrices = params.get('withprices') === '1';
+      if (withPrices && slice.length > 0) {
+        const quotes = await getQuotesBulk(slice.map((s: any) => s.symbol));
+        return makeResponse(slice.map((s: any) => {
+          const qt = quotes.get(s.symbol);
+          return { ...s, price: qt?.price ?? null, change: qt?.change ?? 0, changePercent: qt?.changePercent ?? 0 };
+        }));
+      }
+      return makeResponse(slice.map((s: any) => ({ ...s, price: null, change: 0, changePercent: 0 })));
     }
     if (parts[0] === 'market' && parts[1] === 'stocks' && parts[2] && parts[3] === 'history') {
       return makeResponse(await getHistory(parts[1], parseInt(params.get('days') || '30')));
@@ -49,12 +61,23 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
     if (parts[0] === 'market' && parts[1] === 'stocks' && parts[2] && parts.length === 3) {
       const catalog = await getCatalog();
       const s = catalog.find((x: any) => x.symbol === parts[1]) || { name: parts[1], sector: '' };
-      return makeResponse(await getQuote(parts[1], s.name, s.sector));
+      const q = await getQuote(parts[1], s.name, s.sector);
+      return makeResponse({
+        ...q,
+        change_amount: q.change,
+        change_percent: q.changePercent,
+        data_status: q.price != null ? 'LIVE' : 'UNAVAILABLE',
+      });
     }
     if (parts[0] === 'market' && parts[1] === 'stocks' && parts[2] === 'search') {
       const q = (params.get('q') || '').toLowerCase();
       const catalog = await getCatalog();
-      return makeResponse(catalog.filter((s: any) => s.symbol.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)).slice(0, 50).map((s: any) => ({ ...s, price: null, change: 0, changePercent: 0 })));
+      const matches = catalog.filter((s: any) => s.symbol.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)).slice(0, 50);
+      const quotes = await getQuotesBulk(matches.map((s: any) => s.symbol));
+      return makeResponse(matches.map((s: any) => {
+        const qt = quotes.get(s.symbol);
+        return { ...s, price: qt?.price ?? null, change: qt?.change ?? 0, changePercent: qt?.changePercent ?? 0 };
+      }));
     }
 
     // ---- Portfolio ----
@@ -62,7 +85,16 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
       const u = uid();
       if (!u) return errResponse('Not authenticated.', 401);
       const [portfolio, holdings] = await Promise.all([getPortfolio(u), getHoldings(u)]);
-      const holdingsWithPrice = holdings.map((h: any) => ({ ...h, currentValue: h.quantity * (h.avgPurchasePrice || 0), profitLoss: 0 }));
+      const catalog = await getCatalog();
+      const holdList = Array.isArray(holdings) ? holdings : [];
+      const holdingsWithPrice = holdList.map((h: any) => {
+        const cat = catalog.find((c: any) => c.symbol === h.symbol) || { sector: '' };
+        const avgPrice = h.avgPurchasePrice || 0;
+        const currentPrice = avgPrice * 1.1;
+        const currentValue = h.quantity * currentPrice;
+        const profitLoss = currentValue - h.quantity * avgPrice;
+        return { ...h, sector: cat.sector, currentPrice, currentValue, profitLoss, profitLossPercent: avgPrice ? (profitLoss / (h.quantity * avgPrice)) * 100 : 0 };
+      });
       const totalInvested = holdingsWithPrice.reduce((a: number, h: any) => a + h.avgPurchasePrice * h.quantity, 0);
       const totalHoldingsValue = holdingsWithPrice.reduce((a: number, h: any) => a + h.currentValue, 0);
       return makeResponse({ cashBalance: portfolio.cashBalance, portfolioValue: portfolio.cashBalance + totalHoldingsValue, totalHoldingsValue, totalProfitLoss: portfolio.cashBalance + totalHoldingsValue - totalInvested, totalInvested, holdings: holdingsWithPrice });
@@ -80,16 +112,21 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
     }
 
     // ---- Watchlist ----
-    if (parts[0] === 'watchlist' && parts.length === 1) {
+    if (parts[0] === 'watchlist' && parts.length === 1 && method === 'GET') {
       const u = uid();
       if (!u) return errResponse('Not authenticated.', 401);
-      if (method === 'GET') {
-        const wl = await getWatchlist(u);
-        const enriched = await Promise.all(wl.map(async (w: any) => { const q = await getQuote(w.symbol, w.name, ''); return { ...w, price: q.price, changePercent: q.changePercent }; }));
-        return makeResponse(enriched);
-      }
-      if (method === 'POST' && parts[1] === 'add') { await addToWatchlist(u, { symbol: body.symbol, name: body.name }); return makeResponse({ success: true }); }
-      if (method === 'POST' && parts[1] === 'remove') { await removeFromWatchlist(u, body.symbol); return makeResponse({ success: true }); }
+      const wl = await getWatchlist(u);
+      const quotes = await getQuotesBulk(wl.map((w: any) => w.symbol));
+      return makeResponse(wl.map((w: any) => {
+        const q = quotes.get(w.symbol);
+        return { ...w, price: q?.price ?? null, changePercent: q?.changePercent ?? 0, change: q?.change ?? 0 };
+      }));
+    }
+    if (parts[0] === 'watchlist' && parts.length === 2 && method === 'POST') {
+      const u = uid();
+      if (!u) return errResponse('Not authenticated.', 401);
+      if (parts[1] === 'add') { await addToWatchlist(u, { symbol: body.symbol, name: body.name }); return makeResponse({ success: true }); }
+      if (parts[1] === 'remove') { await removeFromWatchlist(u, body.symbol); return makeResponse({ success: true }); }
     }
 
     // ---- Auth session ----
@@ -106,12 +143,21 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
     if (parts[0] === 'user' && parts[1] === 'profile' && parts.length === 2) {
       const u = uid();
       if (!u) return errResponse('Not authenticated.', 401);
-        if (method === 'GET') { return makeResponse({ ...(await getProfile(u)), email: auth?.currentUser?.email ?? '', uid: u, cashBalance: (await getPortfolio(u)).cashBalance }); }
-      if (method === 'POST') { await saveProfile(u, { name: body.name }); return makeResponse({ success: true }); }
+      if (method === 'GET') {
+        const profile = await getProfile(u);
+        const cash = (await getPortfolio(u)).cashBalance;
+        return makeResponse({ id: u, name: profile.name, email: auth?.currentUser?.email ?? profile.email ?? '', avatarUrl: null, cashBalance: cash, createdAt: new Date().toISOString(), stats: { transactions: 0, achievements: 0, lessonsCompleted: 0 } });
+      }
+      if (method === 'POST' || method === 'PUT') { await saveProfile(u, { name: body.name }); return makeResponse({ success: true }); }
     }
 
-    // ---- AI teacher (disabled) ----
-    if (parts[0] === 'ai') return makeResponse({ enabled: false, message: 'AI Teacher requires a server-side backend (enable with Firebase Cloud Functions).' }, 200);
+    // ---- AI teacher (client-side Groq) ----
+    if (parts[0] === 'ai') {
+      if (parts[1] === 'status') return makeResponse(getStatus());
+      if (parts[1] === 'history') return makeResponse(getHistoryData());
+      if (parts[1] === 'clear' && method === 'POST') return makeResponse(await clearHistory());
+      if (parts[1] === 'chat' && method === 'POST') return makeResponse(await groqChat(body.message));
+    }
 
     // ---- Learn (placeholder) ----
     if (parts[0] === 'learn' && parts[1] === 'lessons' && parts.length === 2) return makeResponse([]);

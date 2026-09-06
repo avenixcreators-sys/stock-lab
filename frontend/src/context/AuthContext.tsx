@@ -46,7 +46,7 @@ interface SessionUser {
 /**
  * Tells the backend (Firebase Admin) to resolve/link/create the StockLab
  * Firestore account for a Firebase ID token. The backend is the authority for
- * the virtual cash balance and ensures ₹500 is granted only on first creation.
+ * the virtual cash balance and ensures ₹1000 is granted only on first creation.
  */
 async function syncSession(idToken: string, fallbackName?: string): Promise<SessionUser> {
   const res = await apiFetch('/api/auth/session', {

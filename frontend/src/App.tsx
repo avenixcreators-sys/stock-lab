@@ -3,6 +3,7 @@ import Navbar from './components/Navbar';
 import Disclaimer from './components/Disclaimer';
 import { useAuth } from './context/AuthContext';
 import { LoadingState } from './components/StateComponents';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Home from './pages/Home';
@@ -38,8 +39,9 @@ export default function App() {
   return (
     <div className="min-h-screen">
       <Navbar />
-      <main className={`${user ? 'pt-16' : ''}`}>
+      <main className={`${user ? 'pt-20' : ''}`}>
         <div className={user || location.pathname.startsWith('/login') || location.pathname.startsWith('/register') ? '' : ''}>
+          <ErrorBoundary>
           <Routes>
             <Route path="/login" element={<PublicOnlyRoute><Login /></PublicOnlyRoute>} />
             <Route path="/register" element={<PublicOnlyRoute><Register /></PublicOnlyRoute>} />
@@ -56,6 +58,7 @@ export default function App() {
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
+          </ErrorBoundary>
         </div>
       </main>
       {user && <Disclaimer />}

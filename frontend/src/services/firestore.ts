@@ -39,9 +39,9 @@ export interface Profile {
 
 export async function getPortfolio(uid: string): Promise<Portfolio> {
   const snap = await getDoc(usersRef(uid));
-  if (!snap.exists()) return { cashBalance: 500 };
+  if (!snap.exists()) return { cashBalance: 1000 };
   const d = snap.data() as Portfolio;
-  return { cashBalance: d.cashBalance ?? 500 };
+  return { cashBalance: d.cashBalance ?? 1000 };
 }
 
 export async function savePortfolio(uid: string, cashBalance: number) {

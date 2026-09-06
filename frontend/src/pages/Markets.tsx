@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Search, TrendingUp, Filter, Clock, Info } from 'lucide-react';
+import { Search, TrendingUp, Filter, Clock } from 'lucide-react';
 import { apiFetch, formatCompact, formatPercent } from '../utils/helpers';
+import { getCatalog } from '../services/marketData';
 import { LoadingState, ErrorState, EmptyState, ChangeIndicator } from '../components/StateComponents';
 import StockCard from '../components/StockCard';
 import { Link } from 'react-router-dom';
@@ -17,15 +18,18 @@ interface Stock {
 type MarketStatus = 'open' | 'closed';
 
 export function getMarketStatus(): MarketStatus {
-  const now = new Date();
-  const ist = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-  const day = ist.getDay();
-  const hour = ist.getHours();
-  const minute = ist.getMinutes();
-  const timeInMinutes = hour * 60 + minute;
-
-  if (day === 0 || day === 6) return 'closed';
-  if (timeInMinutes >= 9 * 60 + 15 && timeInMinutes <= 15 * 60 + 30) return 'open';
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Kolkata',
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date());
+  const get = (t: string) => parts.find(p => p.type === t)?.value ?? '';
+  const day = get('weekday');
+  if (day === 'Sat' || day === 'Sun') return 'closed';
+  const timeInMinutes = parseInt(get('hour'), 10) * 60 + parseInt(get('minute'), 10);
+  if (timeInMinutes >= 9 * 60 + 15 && timeInMinutes < 15 * 60 + 30) return 'open';
   return 'closed';
 }
 
@@ -37,16 +41,21 @@ export default function Markets() {
   const [searching, setSearching] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [total, setTotal] = useState(0);
+  const [sectors, setSectors] = useState<string[]>([]);
 
   const loadStocks = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const res = await apiFetch('/api/market/stocks?limit=5000');
+      const res = await apiFetch('/api/market/stocks?limit=50&withprices=1');
       if (!res.ok) throw new Error('Failed to load stocks');
       const data = await res.json();
       setStocks(data);
       setFilteredStocks(data);
+      const catalog = await getCatalog();
+      setTotal(catalog.length);
+      setSectors(Array.from(new Set(catalog.map((s: any) => s.sector))));
     } catch (err: any) {
       setError(err.message || 'Failed to load stocks');
     } finally {
@@ -91,9 +100,7 @@ export default function Markets() {
     return () => clearTimeout(handle);
   }, [search, sector, stocks]);
 
-  const sectors = Array.from(new Set(stocks.map(s => s.sector)));
   const marketOpen = getMarketStatus();
-  const unavailableCount = stocks.filter(s => s.price == null).length;
 
   const sortByChange = () => {
     const sorted = [...filteredStocks].sort((a, b) => b.changePercent - a.changePercent);
@@ -125,17 +132,6 @@ export default function Markets() {
           Market {marketOpen === 'open' ? 'Open' : 'Closed'}
         </div>
       </div>
-
-      {unavailableCount > 0 && (
-        <div className="flex items-start gap-2 p-3 rounded-lg bg-warning-light dark:bg-warning/10 text-warning-dark dark:text-amber-300 text-sm border border-warning/30 dark:border-warning/20">
-          <Info className="w-4 h-4 mt-0.5 shrink-0" />
-          <p>
-            {unavailableCount} symbol{unavailableCount === 1 ? '' : 's'} show &quot;—&quot; (Unavailable): the free
-            market-data provider doesn&apos;t deliver live quotes for every listing from this server. Prices shown are
-            real where available — StockLab never fabricates prices, and trading is virtual.
-          </p>
-        </div>
-      )}
 
       <div className="flex flex-col md:flex-row gap-3">
         <div className="relative flex-1">
@@ -169,7 +165,7 @@ export default function Markets() {
       <div className="flex items-center justify-between">
         <p className="text-sm text-gray-500 flex items-center gap-1.5">
           <Clock className="w-4 h-4" />
-          Showing {filteredStocks.length} of {stocks.length} companies
+          Showing {filteredStocks.length} of {total} companies
         </p>
         <p className="text-xs text-gray-400">Prices from a market-data provider — trading is virtual</p>
       </div>

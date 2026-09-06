@@ -76,7 +76,7 @@ export default function Profile() {
 
   if (loading) return <LoadingState text="Loading profile..." height="h-screen" />;
   if (error) return <ErrorState message={error} onRetry={loadProfile} />;
-  if (!profile) return null;
+  if (!profile) return <ErrorState message="Unable to load profile." onRetry={loadProfile} />;
 
   const statCards = [
     { label: 'Transactions', value: profile.stats.transactions, icon: TrendingUp, color: 'text-primary-500', bg: 'bg-primary-50 dark:bg-primary-900/30' },
@@ -166,7 +166,7 @@ export default function Profile() {
               <div className="flex justify-between items-center p-4 rounded-xl bg-gray-50 dark:bg-gray-800">
                 <div>
                   <div className="font-medium">Virtual Cash Balance</div>
-                  <div className="text-xs text-gray-500">Starting balance: ₹500 Virtual Cash</div>
+                  <div className="text-xs text-gray-500">Starting balance: ₹1000 Virtual Cash</div>
                 </div>
                 <div className="text-xl font-bold">{formatCompact(profile.cashBalance)}</div>
               </div>

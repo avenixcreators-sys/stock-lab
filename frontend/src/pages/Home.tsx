@@ -85,9 +85,12 @@ export default function Home() {
   return (
     <div className="page-container space-y-6 animate-fade-in">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Welcome back! 👋</h1>
-          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Here's your StockLab portfolio overview</p>
+        <div className="flex items-center gap-4">
+          <img src="/logo.png" alt="StockLab logo" className="w-[2cm] h-[2cm] rounded-2xl object-cover shadow-lg shrink-0" />
+          <div className="flex flex-col gap-3">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Welcome back! 👋</h1>
+            <p className="text-gray-500 dark:text-gray-400 text-sm">Here's your StockLab portfolio overview</p>
+          </div>
         </div>
         <Link to="/markets" className="btn-primary inline-flex items-center gap-2">
           <TrendingUp className="w-4 h-4" /> Explore Markets
@@ -97,7 +100,7 @@ export default function Home() {
       <div className="flex items-center justify-between gap-4 p-3 bg-gradient-to-r from-primary-50 to-emerald-50 dark:from-primary-950/30 dark:to-emerald-950/30 rounded-xl">
         <div className="flex items-center gap-2 text-xs text-primary-700 dark:text-primary-300">
           <Wallet className="w-4 h-4" />
-          <span>Virtual Cash: {portfolio ? formatCompact(portfolio.cashBalance) : '₹500'}</span>
+          <span>Virtual Cash: {portfolio ? formatCompact(portfolio.cashBalance) : '₹1000'}</span>
         </div>
         <div className="flex items-center gap-2 text-xs text-gray-500">
           <Star className="w-4 h-4 text-amber-400" />
