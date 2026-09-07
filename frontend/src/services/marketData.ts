@@ -1,5 +1,16 @@
 const PROXY = import.meta.env.VITE_MARKET_PROXY || '';
 const AV_KEY = import.meta.env.VITE_ALPHA_VANTAGE_API_KEY || '';
+import catalogData from '../data/catalog.json';
+
+export interface CatalogEntry {
+  symbol: string;
+  name: string;
+  sector: string;
+}
+
+export function getCatalogSync(): CatalogEntry[] {
+  return catalogData as CatalogEntry[];
+}
 
 interface DailySeries {
   [date: string]: { '4. close': string };
@@ -91,13 +102,8 @@ export async function getQuotesBulk(symbols: string[]): Promise<Map<string, Bulk
   return out;
 }
 
-export async function getCatalog(): Promise<{ symbol: string; name: string; sector: string }[]> {
-  try {
-    const r = await fetch('/stocks.json');
-    return r.ok ? await r.json() : [];
-  } catch {
-    return [];
-  }
+export async function getCatalog(): Promise<CatalogEntry[]> {
+  return getCatalogSync();
 }
 
 export async function getQuote(symbol: string, name: string, sector: string): Promise<MarketQuote> {
