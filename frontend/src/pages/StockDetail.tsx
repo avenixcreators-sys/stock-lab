@@ -177,7 +177,9 @@ export default function StockDetail() {
     : dataStatus === 'CACHED' ? 'Cached'
     : 'Unavailable';
   const statusNote =
-    dataStatus === 'DELAYED'
+    dataStatus === 'LIVE'
+      ? 'Real-time market price — trading is virtual.'
+      : dataStatus === 'DELAYED'
       ? 'Delayed market price from a data provider — trading is virtual.'
       : dataStatus === 'CACHED'
       ? 'Last known price from a data provider — market data currently unavailable.'
