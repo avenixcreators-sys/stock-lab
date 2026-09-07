@@ -66,6 +66,11 @@ export default function StockDetail() {
       const data = await res.json();
       setStock(data);
       setWatchlisted(data.inWatchlist);
+      if (data.inCatalog === false && data.price == null) {
+        setError(`"${symbol}" isn't a stock in StockLab's catalog. Search Markets to pick a real stock.`);
+        setLoading(false);
+        return;
+      }
 
       const historyRes = await apiFetch(`/api/market/stocks/${symbol}/history?days=30`);
       const historyData = await historyRes.json();
