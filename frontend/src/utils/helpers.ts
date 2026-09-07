@@ -56,10 +56,20 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
       return makeResponse(slice.map((s: any) => ({ ...s, price: null, change: 0, changePercent: 0 })));
     }
     if (parts[0] === 'market' && parts[1] === 'stocks' && parts[2] && parts[3] === 'history') {
-      return makeResponse(await getHistory(parts[1], parseInt(params.get('days') || '30')));
+      return makeResponse(await getHistory(parts[2], parseInt(params.get('days') || '30')));
+    }
+    if (parts[0] === 'market' && parts[1] === 'stocks' && parts[2] === 'search') {
+      const q = (params.get('q') || '').toLowerCase();
+      const catalog = await getCatalog();
+      const matches = catalog.filter((s: any) => s.symbol.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)).slice(0, 50);
+      const quotes = await getQuotesBulk(matches.map((s: any) => s.symbol));
+      return makeResponse(matches.map((s: any) => {
+        const qt = quotes.get(s.symbol);
+        return { ...s, price: qt?.price ?? null, change: qt?.change ?? 0, changePercent: qt?.changePercent ?? 0 };
+      }));
     }
     if (parts[0] === 'market' && parts[1] === 'stocks' && parts[2] && parts.length === 3) {
-      const symbol = decodeURIComponent(parts[1]).trim();
+      const symbol = decodeURIComponent(parts[2]).trim();
       const catalog = await getCatalog();
       const listed = catalog.find((x: any) => x.symbol.toLowerCase() === symbol.toLowerCase());
       const s = listed || { name: symbol, sector: '' };
@@ -73,16 +83,6 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
         change_percent: q.changePercent,
         data_status: q.price != null ? 'LIVE' : 'UNAVAILABLE',
       });
-    }
-    if (parts[0] === 'market' && parts[1] === 'stocks' && parts[2] === 'search') {
-      const q = (params.get('q') || '').toLowerCase();
-      const catalog = await getCatalog();
-      const matches = catalog.filter((s: any) => s.symbol.toLowerCase().includes(q) || s.name.toLowerCase().includes(q)).slice(0, 50);
-      const quotes = await getQuotesBulk(matches.map((s: any) => s.symbol));
-      return makeResponse(matches.map((s: any) => {
-        const qt = quotes.get(s.symbol);
-        return { ...s, price: qt?.price ?? null, change: qt?.change ?? 0, changePercent: qt?.changePercent ?? 0 };
-      }));
     }
 
     // ---- Portfolio ----

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { Star, ArrowUpRight, ArrowDownRight, Building2, BarChart3, Percent, Wallet, TrendingUp, ShieldOff, X } from 'lucide-react';
 import { apiFetch, formatCompact, formatPercent } from '../utils/helpers';
+import { getCatalog } from '../services/marketData';
 import { LoadingState, ErrorState, ChangeIndicator } from '../components/StateComponents';
 import PriceChart from '../components/PriceChart';
 import { useAuth } from '../context/AuthContext';
@@ -61,16 +62,25 @@ export default function StockDetail() {
     setLoading(true);
     setError('');
     try {
-      const res = await apiFetch(`/api/market/stocks/${symbol}`);
+      const [catalog, res] = await Promise.all([
+        getCatalog(),
+        apiFetch(`/api/market/stocks/${symbol}`),
+      ]);
       if (!res.ok) throw new Error('Stock not found');
       const data = await res.json();
-      setStock(data);
-      setWatchlisted(data.inWatchlist);
-      if (data.inCatalog === false && data.price == null) {
+      const listed = catalog.find(
+        (s: any) => s.symbol.toLowerCase() === String(symbol || '').toLowerCase()
+      );
+      if (!listed && data.price == null) {
         setError(`"${symbol}" isn't a stock in StockLab's catalog. Search Markets to pick a real stock.`);
         setLoading(false);
         return;
       }
+      const stockData = listed
+        ? { ...data, name: listed.name, sector: listed.sector, inCatalog: true }
+        : { ...data, inCatalog: false };
+      setStock(stockData);
+      setWatchlisted(data.inWatchlist);
 
       const historyRes = await apiFetch(`/api/market/stocks/${symbol}/history?days=30`);
       const historyData = await historyRes.json();
