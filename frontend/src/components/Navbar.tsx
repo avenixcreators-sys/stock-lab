@@ -40,7 +40,7 @@ export default function Navbar() {
               StockLab
             </span>
             <span className="text-[0.6rem] font-semibold px-1.5 py-0.5 rounded-full bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-300">
-              v3
+              v4
             </span>
           </Link>
 

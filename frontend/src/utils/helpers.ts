@@ -59,10 +59,11 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
       return makeResponse(await getHistory(parts[1], parseInt(params.get('days') || '30')));
     }
     if (parts[0] === 'market' && parts[1] === 'stocks' && parts[2] && parts.length === 3) {
+      const symbol = decodeURIComponent(parts[1]).trim();
       const catalog = await getCatalog();
-      const listed = catalog.find((x: any) => x.symbol === parts[1]);
-      const s = listed || { name: parts[1], sector: '' };
-      const q = await getQuote(parts[1], s.name, s.sector);
+      const listed = catalog.find((x: any) => x.symbol.toLowerCase() === symbol.toLowerCase());
+      const s = listed || { name: symbol, sector: '' };
+      const q = await getQuote(symbol, s.name, s.sector);
       return makeResponse({
         ...q,
         name: listed ? s.name : (q.price != null && q.providerName ? q.providerName : s.name),
