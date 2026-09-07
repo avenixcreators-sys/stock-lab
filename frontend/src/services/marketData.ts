@@ -53,6 +53,7 @@ export interface MarketQuote {
   price: number | null;
   change: number;
   changePercent: number;
+  providerName?: string;
 }
 
 export interface BulkQuote {
@@ -60,6 +61,7 @@ export interface BulkQuote {
   price: number;
   change: number;
   changePercent: number;
+  providerName?: string;
 }
 
 export async function getQuotesBulk(symbols: string[]): Promise<Map<string, BulkQuote>> {
@@ -81,6 +83,7 @@ export async function getQuotesBulk(symbols: string[]): Promise<Map<string, Bulk
         price,
         change: meta.fulldayChange ?? meta.regularMarketChange ?? 0,
         changePercent: meta.fulldayChangePercent ?? meta.regularMarketChangePercent ?? 0,
+        providerName: meta.shortName ?? undefined,
       });
     }
     await new Promise(res => setTimeout(res, 350));
@@ -111,7 +114,7 @@ export async function getQuote(symbol: string, name: string, sector: string): Pr
   if (PROXY) {
     const quotes = await getQuotesBulk([symbol]);
     const q = quotes.get(symbol);
-    if (q) return { symbol, name, sector, price: q.price, change: q.change, changePercent: q.changePercent };
+    if (q) return { symbol, name, sector, price: q.price, change: q.change, changePercent: q.changePercent, providerName: q.providerName };
     const history = await yahooChart(symbol, 2);
     if (history.length >= 2) {
       const price = history[history.length - 1].price;

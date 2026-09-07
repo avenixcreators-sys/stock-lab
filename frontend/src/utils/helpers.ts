@@ -60,10 +60,14 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
     }
     if (parts[0] === 'market' && parts[1] === 'stocks' && parts[2] && parts.length === 3) {
       const catalog = await getCatalog();
-      const s = catalog.find((x: any) => x.symbol === parts[1]) || { name: parts[1], sector: '' };
+      const listed = catalog.find((x: any) => x.symbol === parts[1]);
+      const s = listed || { name: parts[1], sector: '' };
       const q = await getQuote(parts[1], s.name, s.sector);
       return makeResponse({
         ...q,
+        name: listed ? s.name : (q.price != null && q.providerName ? q.providerName : s.name),
+        sector: listed ? s.sector : (q.price != null && q.providerName ? '' : ''),
+        inCatalog: !!listed,
         change_amount: q.change,
         change_percent: q.changePercent,
         data_status: q.price != null ? 'LIVE' : 'UNAVAILABLE',

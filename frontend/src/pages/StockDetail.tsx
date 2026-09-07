@@ -29,6 +29,7 @@ interface StockData {
   fifty_two_week_low: number;
   inWatchlist: boolean;
   data_status?: string;
+  inCatalog?: boolean;
 }
 
 const timeRanges = [
@@ -165,6 +166,8 @@ export default function StockDetail() {
       ? 'Delayed market price from a data provider — trading is virtual.'
       : dataStatus === 'CACHED'
       ? 'Last known price from a data provider — market data currently unavailable.'
+      : dataStatus === 'UNAVAILABLE' && stock.inCatalog === false
+      ? `${stock.name} isn't in StockLab's catalog — search Markets for listed Indian stocks.`
       : 'Market data currently unavailable. Please try again shortly.';
   const totalCost = typeof quantity === 'number' ? quantity * stock.price : 0;
   const totalProceeds = typeof quantity === 'number' ? quantity * stock.price : 0;
