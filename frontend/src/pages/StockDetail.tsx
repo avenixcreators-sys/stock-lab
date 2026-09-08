@@ -129,6 +129,7 @@ export default function StockDetail() {
   };
 
   const submitOrder = async () => {
+    if (!stock) return;
     if (!quantity || (typeof quantity === 'number' && quantity <= 0)) {
       setTradeError('Please enter a valid quantity');
       return;
