@@ -167,6 +167,7 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
         if (!u) return errResponse('Not signed in.', 401);
         const [profile, portfolio] = await Promise.all([getProfile(u.uid), getPortfolio(u.uid)]);
         const fallbackName = (body?.name && String(body.name).trim()) || profile.name || u.displayName || '';
+        if (!profile.name && body?.name) await saveProfile(u.uid, { name: String(body.name).trim() });
         return makeResponse({
           user: {
             id: u.uid, uid: u.uid, email: u.email ?? profile.email ?? '',
@@ -187,9 +188,7 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
         const profile = await getProfile(u);
         const [cash, txs] = await Promise.all([getPortfolio(u), getTransactions(u).then(t => t.length)]);
         const created = auth?.currentUser?.metadata?.creationTime || new Date().toISOString();
-        const payload = { id: u, name: profile.name, email: auth?.currentUser?.email ?? profile.email ?? '', avatarUrl: null, cashBalance: cash.cashBalance, createdAt: created, stats: { transactions: txs, achievements: 0, lessonsCompleted: 0 } };
-        console.log('[DEBUGRESP]', u, JSON.stringify(payload));
-        return makeResponse(payload);
+        return makeResponse({ id: u, name: profile.name, email: auth?.currentUser?.email ?? profile.email ?? '', avatarUrl: null, cashBalance: cash.cashBalance, createdAt: created, stats: { transactions: txs, achievements: 0, lessonsCompleted: 0 } });
       }
       if (method === 'POST' || method === 'PUT') { await saveProfile(u, { name: body.name }); return makeResponse({ success: true }); }
     }
