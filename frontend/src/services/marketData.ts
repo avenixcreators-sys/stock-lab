@@ -65,6 +65,14 @@ export interface MarketQuote {
   change: number;
   changePercent: number;
   providerName?: string;
+  currency?: string;
+  exchange?: string;
+  dayHigh?: number;
+  dayLow?: number;
+  previousClose?: number;
+  volume?: number;
+  fiftyTwoWeekHigh?: number;
+  fiftyTwoWeekLow?: number;
 }
 
 export interface BulkQuote {
@@ -73,6 +81,14 @@ export interface BulkQuote {
   change: number;
   changePercent: number;
   providerName?: string;
+  currency?: string;
+  exchange?: string;
+  dayHigh?: number;
+  dayLow?: number;
+  previousClose?: number;
+  volume?: number;
+  fiftyTwoWeekHigh?: number;
+  fiftyTwoWeekLow?: number;
 }
 
 export async function getQuotesBulk(symbols: string[]): Promise<Map<string, BulkQuote>> {
@@ -95,6 +111,14 @@ export async function getQuotesBulk(symbols: string[]): Promise<Map<string, Bulk
         change: meta.fulldayChange ?? meta.regularMarketChange ?? 0,
         changePercent: meta.fulldayChangePercent ?? meta.regularMarketChangePercent ?? 0,
         providerName: meta.shortName ?? undefined,
+        currency: meta.currency ?? undefined,
+        exchange: meta.fullExchangeName ?? meta.exchangeName ?? undefined,
+        dayHigh: meta.regularMarketDayHigh ?? undefined,
+        dayLow: meta.regularMarketDayLow ?? undefined,
+        previousClose: meta.previousClose ?? meta.chartPreviousClose ?? undefined,
+        volume: meta.regularMarketVolume ?? undefined,
+        fiftyTwoWeekHigh: meta.fiftyTwoWeekHigh ?? undefined,
+        fiftyTwoWeekLow: meta.fiftyTwoWeekLow ?? undefined,
       });
     }
     await new Promise(res => setTimeout(res, 350));
@@ -120,7 +144,12 @@ export async function getQuote(symbol: string, name: string, sector: string): Pr
   if (PROXY) {
     const quotes = await getQuotesBulk([symbol]);
     const q = quotes.get(symbol);
-    if (q) return { symbol, name, sector, price: q.price, change: q.change, changePercent: q.changePercent, providerName: q.providerName };
+    if (q) return {
+      symbol, name, sector, price: q.price, change: q.change, changePercent: q.changePercent,
+      providerName: q.providerName, currency: q.currency, exchange: q.exchange, dayHigh: q.dayHigh,
+      dayLow: q.dayLow, previousClose: q.previousClose, volume: q.volume,
+      fiftyTwoWeekHigh: q.fiftyTwoWeekHigh, fiftyTwoWeekLow: q.fiftyTwoWeekLow,
+    };
     const history = await yahooChart(symbol, 2);
     if (history.length >= 2) {
       const price = history[history.length - 1].price;

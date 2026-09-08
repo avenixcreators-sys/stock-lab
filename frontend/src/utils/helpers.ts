@@ -74,6 +74,7 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
       const listed = catalog.find((x: any) => x.symbol.toLowerCase() === symbol.toLowerCase());
       const s = listed || { name: symbol, sector: '' };
       const q = await getQuote(symbol, s.name, s.sector);
+      const exchange = q.exchange === 'NSI' ? 'NSE' : q.exchange === 'BSE' ? 'BSE' : q.exchange;
       return makeResponse({
         ...q,
         name: listed ? s.name : (q.price != null && q.providerName ? q.providerName : s.name),
@@ -82,6 +83,18 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
         change_amount: q.change,
         change_percent: q.changePercent,
         data_status: q.price != null ? 'LIVE' : 'UNAVAILABLE',
+        exchange,
+        high: q.dayHigh ?? q.price,
+        low: q.dayLow ?? q.price,
+        open: q.previousClose ?? q.price,
+        previous_close: q.previousClose ?? q.price,
+        volume: q.volume ?? undefined,
+        fifty_two_week_high: q.fiftyTwoWeekHigh ?? undefined,
+        fifty_two_week_low: q.fiftyTwoWeekLow ?? undefined,
+        market_cap: undefined,
+        pe_ratio: undefined,
+        dividend_yield: undefined,
+        description: '',
       });
     }
 
@@ -92,10 +105,12 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
       const [portfolio, holdings] = await Promise.all([getPortfolio(u), getHoldings(u)]);
       const catalog = await getCatalog();
       const holdList = Array.isArray(holdings) ? holdings : [];
+      const quotes = holdList.length > 0 ? await getQuotesBulk(holdList.map((h: any) => h.symbol)) : new Map();
       const holdingsWithPrice = holdList.map((h: any) => {
         const cat = catalog.find((c: any) => c.symbol === h.symbol) || { sector: '' };
         const avgPrice = h.avgPurchasePrice || 0;
-        const currentPrice = avgPrice * 1.1;
+        const quote = quotes.get(h.symbol);
+        const currentPrice = quote?.price ?? Number.isFinite(avgPrice) ? avgPrice : 0;
         const currentValue = h.quantity * currentPrice;
         const profitLoss = currentValue - h.quantity * avgPrice;
         return { ...h, sector: cat.sector, currentPrice, currentValue, profitLoss, profitLossPercent: avgPrice ? (profitLoss / (h.quantity * avgPrice)) * 100 : 0 };
@@ -134,7 +149,13 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
     if (parts[0] === 'watchlist' && parts.length === 2 && method === 'POST') {
       const u = uid();
       if (!u) return errResponse('Not authenticated.', 401);
-      if (parts[1] === 'add') { await addToWatchlist(u, { symbol: body.symbol, name: body.name }); return makeResponse({ success: true }); }
+      if (parts[1] === 'add') {
+        const cat = await getCatalog();
+        const listed = cat.find((x: any) => x.symbol === body.symbol);
+        const name = (body.name && String(body.name).trim()) || listed?.name || body.symbol;
+        await addToWatchlist(u, { symbol: body.symbol, name });
+        return makeResponse({ success: true });
+      }
       if (parts[1] === 'remove') { await removeFromWatchlist(u, body.symbol); return makeResponse({ success: true }); }
     }
 
@@ -143,8 +164,17 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
       if (method === 'POST') {
         const u = auth?.currentUser;
         if (!u) return errResponse('Not signed in.', 401);
-        const profile = await getProfile(u.uid);
-        return makeResponse({ user: { uid: u.uid, email: u.email, name: profile.name, token: await u.getIdToken() } });
+        const [profile, portfolio] = await Promise.all([getProfile(u.uid), getPortfolio(u.uid)]);
+        const fallbackName = (body?.name && String(body.name).trim()) || profile.name || u.displayName || '';
+        return makeResponse({
+          user: {
+            id: u.uid, uid: u.uid, email: u.email ?? profile.email ?? '',
+            name: fallbackName, avatarUrl: null,
+            cashBalance: portfolio.cashBalance,
+            createdAt: u.metadata?.creationTime || new Date().toISOString(),
+            token: await u.getIdToken(),
+          },
+        });
       }
     }
 
@@ -154,8 +184,9 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
       if (!u) return errResponse('Not authenticated.', 401);
       if (method === 'GET') {
         const profile = await getProfile(u);
-        const cash = (await getPortfolio(u)).cashBalance;
-        return makeResponse({ id: u, name: profile.name, email: auth?.currentUser?.email ?? profile.email ?? '', avatarUrl: null, cashBalance: cash, createdAt: new Date().toISOString(), stats: { transactions: 0, achievements: 0, lessonsCompleted: 0 } });
+        const [cash, txs] = await Promise.all([getPortfolio(u), getTransactions(u).then(t => t.length).catch(() => 0)]);
+        const created = auth?.currentUser?.metadata?.creationTime || new Date().toISOString();
+        return makeResponse({ id: u, name: profile.name, email: auth?.currentUser?.email ?? profile.email ?? '', avatarUrl: null, cashBalance: cash.cashBalance, createdAt: created, stats: { transactions: txs, achievements: 0, lessonsCompleted: 0 } });
       }
       if (method === 'POST' || method === 'PUT') { await saveProfile(u, { name: body.name }); return makeResponse({ success: true }); }
     }
