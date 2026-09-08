@@ -52,6 +52,11 @@ if (isFirebaseConfigured) {
 /** Firebase app, or null when Firebase is not configured. */
 export const app: FirebaseApp | null = _app;
 
+// DEBUG-ONLY hook for diagnosing data on the live site. REMOVE after debugging.
+if (typeof window !== 'undefined') {
+  (window as any).__lab = { app: _app, auth: _auth, db: _db };
+}
+
 /** Firebase Auth instance, or null when Firebase is not configured. */
 export const auth: Auth | null = _auth;
 
