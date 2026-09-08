@@ -37,6 +37,7 @@ export default function Profile() {
       const res = await apiFetch('/api/user/profile');
       if (!res.ok) throw new Error('Failed to load profile');
       const data = await res.json();
+      console.log('[DEBUGPROF]', JSON.stringify({ name: data.name, stats: data.stats }));
       setProfile(data);
       setName(data.name);
     } catch (err: any) {
