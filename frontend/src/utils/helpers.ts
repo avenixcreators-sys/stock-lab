@@ -187,7 +187,9 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
         const profile = await getProfile(u);
         const [cash, txs] = await Promise.all([getPortfolio(u), getTransactions(u).then(t => t.length)]);
         const created = auth?.currentUser?.metadata?.creationTime || new Date().toISOString();
-        return makeResponse({ id: u, name: profile.name, email: auth?.currentUser?.email ?? profile.email ?? '', avatarUrl: null, cashBalance: cash.cashBalance, createdAt: created, stats: { transactions: txs, achievements: 0, lessonsCompleted: 0 } });
+        const payload = { id: u, name: profile.name, email: auth?.currentUser?.email ?? profile.email ?? '', avatarUrl: null, cashBalance: cash.cashBalance, createdAt: created, stats: { transactions: txs, achievements: 0, lessonsCompleted: 0 } };
+        console.log('[DEBUGRESP]', u, JSON.stringify(payload));
+        return makeResponse(payload);
       }
       if (method === 'POST' || method === 'PUT') { await saveProfile(u, { name: body.name }); return makeResponse({ success: true }); }
     }
