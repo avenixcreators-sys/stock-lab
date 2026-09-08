@@ -80,7 +80,7 @@ export default function Home() {
   if (loading) return <LoadingState text="Loading your portfolio..." height="h-screen" />;
   if (error) return <ErrorState message={error} onRetry={loadData} />;
 
-  const profitPercent = portfolio ? (portfolio.totalProfitLoss / (portfolio.totalInvested || 1)) * 100 : 0;
+  const profitPercent = portfolio && portfolio.totalInvested > 0 ? (portfolio.totalProfitLoss / portfolio.totalInvested) * 100 : 0;
 
   return (
     <div className="page-container space-y-6 animate-fade-in">

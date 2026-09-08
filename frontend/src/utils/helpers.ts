@@ -1,6 +1,6 @@
 import { getCatalog, getQuote, getHistory, getQuotesBulk } from '../services/marketData';
 import {
-  getPortfolio, getHoldings, getTransactions, getWatchlist,
+  getPortfolio, getHoldings, getTransactions, getTransactionCount, getWatchlist,
   addToWatchlist, removeFromWatchlist, executeTrade, getProfile, saveProfile,
 } from '../services/firestore';
 import { getStatus, getHistoryData, clearHistory, chat as groqChat } from '../services/ai';
@@ -117,7 +117,8 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
       });
       const totalInvested = holdingsWithPrice.reduce((a: number, h: any) => a + h.avgPurchasePrice * h.quantity, 0);
       const totalHoldingsValue = holdingsWithPrice.reduce((a: number, h: any) => a + h.currentValue, 0);
-      return makeResponse({ cashBalance: portfolio.cashBalance, portfolioValue: portfolio.cashBalance + totalHoldingsValue, totalHoldingsValue, totalProfitLoss: portfolio.cashBalance + totalHoldingsValue - totalInvested, totalInvested, holdings: holdingsWithPrice });
+      const totalProfitLoss = holdingsWithPrice.reduce((a: number, h: any) => a + h.profitLoss, 0);
+      return makeResponse({ cashBalance: portfolio.cashBalance, portfolioValue: portfolio.cashBalance + totalHoldingsValue, totalHoldingsValue, totalProfitLoss, totalInvested, holdings: holdingsWithPrice });
     }
     if (parts[0] === 'portfolio' && (parts[1] === 'buy' || parts[1] === 'sell') && parts.length === 2 && method === 'POST') {
       const u = uid();
@@ -184,7 +185,7 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
       if (!u) return errResponse('Not authenticated.', 401);
       if (method === 'GET') {
         const profile = await getProfile(u);
-        const [cash, txs] = await Promise.all([getPortfolio(u), getTransactions(u).then(t => t.length).catch(() => 0)]);
+        const [cash, txs] = await Promise.all([getPortfolio(u), getTransactionCount(u)]);
         const created = auth?.currentUser?.metadata?.creationTime || new Date().toISOString();
         return makeResponse({ id: u, name: profile.name, email: auth?.currentUser?.email ?? profile.email ?? '', avatarUrl: null, cashBalance: cash.cashBalance, createdAt: created, stats: { transactions: txs, achievements: 0, lessonsCompleted: 0 } });
       }

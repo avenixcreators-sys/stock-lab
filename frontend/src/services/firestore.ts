@@ -59,6 +59,11 @@ export async function getTransactions(uid: string, lim = 100): Promise<Transacti
   return snap.docs.map(d => ({ id: d.id, ...d.data() } as Transaction));
 }
 
+export async function getTransactionCount(uid: string): Promise<number> {
+  const snap = await getDocs(colRef(uid, 'transactions'));
+  return snap.size;
+}
+
 export async function getWatchlist(uid: string): Promise<WatchlistEntry[]> {
   const snap = await getDocs(colRef(uid, 'watchlist'));
   return snap.docs.map(d => ({ id: d.id, ...(d.data() as unknown as WatchlistEntry) } as unknown as WatchlistEntry));
