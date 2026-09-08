@@ -107,7 +107,11 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
     if (parts[0] === 'portfolio' && (parts[1] === 'buy' || parts[1] === 'sell') && parts.length === 2 && method === 'POST') {
       const u = uid();
       if (!u) return errResponse('Not authenticated.', 401);
-      const result = await executeTrade(u, { type: parts[1], symbol: body.symbol, name: body.name, quantity: body.quantity, price: body.price });
+      if (!body.symbol || !body.quantity || !body.price) return errResponse('symbol, quantity and price are required.', 400);
+      const cat = await getCatalog();
+      const listed = cat.find(x => x.symbol === body.symbol);
+      const tradeName = (body.name && String(body.name).trim()) || listed?.name || body.symbol;
+      const result = await executeTrade(u, { type: parts[1], symbol: body.symbol, name: tradeName, quantity: body.quantity, price: body.price });
       return makeResponse(result);
     }
     if (parts[0] === 'portfolio' && parts[1] === 'transactions' && parts.length === 2) {

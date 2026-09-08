@@ -140,7 +140,7 @@ export default function StockDetail() {
     try {
       const res = await apiFetch(`/api/portfolio/${tradeType}`, {
         method: 'POST',
-        body: JSON.stringify({ symbol: symbol?.toUpperCase(), quantity: Number(quantity) })
+        body: JSON.stringify({ symbol: symbol?.toUpperCase(), name: stock.name, quantity: Number(quantity), price: stock.price })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
