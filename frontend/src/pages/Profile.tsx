@@ -84,6 +84,7 @@ export default function Profile() {
     { label: 'Lessons Completed', value: profile.stats.lessonsCompleted, icon: BookOpen, color: 'text-emerald-500', bg: 'bg-emerald-50 dark:bg-emerald-900/30' },
     { label: 'Badges Earned', value: profile.stats.achievements, icon: Trophy, color: 'text-amber-500', bg: 'bg-amber-50 dark:bg-amber-900/30' },
   ];
+  console.log('[DEBUGRENDER]', JSON.stringify({ tx: profile.stats.transactions, lc: profile.stats.lessonsCompleted, ach: profile.stats.achievements, keys: Object.keys(profile.stats || {}) }));
 
   return (
     <div className="page-container space-y-6 animate-fade-in">
