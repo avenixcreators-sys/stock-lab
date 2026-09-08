@@ -56,7 +56,11 @@ export async function getHoldings(uid: string): Promise<Holding[]> {
 export async function getTransactions(uid: string, lim = 100): Promise<Transaction[]> {
   const q = query(colRef(uid, 'transactions'), orderBy('createdAt', 'desc'), limit(lim));
   const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() } as Transaction));
+  return snap.docs.map(d => {
+    const data = d.data() as any;
+    const createdAt = data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt || '');
+    return { id: d.id, ...data, createdAt } as Transaction;
+  });
 }
 
 export async function getTransactionCount(uid: string): Promise<number> {

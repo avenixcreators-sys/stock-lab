@@ -1,6 +1,6 @@
 import { getCatalog, getQuote, getHistory, getQuotesBulk } from '../services/marketData';
 import {
-  getPortfolio, getHoldings, getTransactions, getTransactionCount, getWatchlist,
+  getPortfolio, getHoldings, getTransactions, getWatchlist,
   addToWatchlist, removeFromWatchlist, executeTrade, getProfile, saveProfile,
 } from '../services/firestore';
 import { getStatus, getHistoryData, clearHistory, chat as groqChat } from '../services/ai';
@@ -185,7 +185,7 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
       if (!u) return errResponse('Not authenticated.', 401);
       if (method === 'GET') {
         const profile = await getProfile(u);
-        const [cash, txs] = await Promise.all([getPortfolio(u), getTransactionCount(u)]);
+        const [cash, txs] = await Promise.all([getPortfolio(u), getTransactions(u).then(t => t.length)]);
         const created = auth?.currentUser?.metadata?.creationTime || new Date().toISOString();
         return makeResponse({ id: u, name: profile.name, email: auth?.currentUser?.email ?? profile.email ?? '', avatarUrl: null, cashBalance: cash.cashBalance, createdAt: created, stats: { transactions: txs, achievements: 0, lessonsCompleted: 0 } });
       }
